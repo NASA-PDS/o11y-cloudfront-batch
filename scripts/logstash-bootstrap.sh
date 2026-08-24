@@ -8,11 +8,11 @@
 # `logstash` user with scripts/logstash-deploy.sh, no sudo required.
 #
 # Usage (root, e.g. via SSM):
-#   sudo bash /opt/web-analytics/scripts/logstash-bootstrap.sh
+#   sudo bash /opt/o11y-cloudfront-batch/scripts/logstash-bootstrap.sh
 #
 # Env overrides:
 #   LOGSTASH_VERSION — Logstash version to install if missing (default: 8.18.0)
-#   REPO_DIR         — path to the cloned web-analytics repo (default: /opt/web-analytics)
+#   REPO_DIR         — path to the cloned o11y-cloudfront-batch repo (default: /opt/o11y-cloudfront-batch)
 
 set -euo pipefail
 
@@ -22,9 +22,9 @@ if [ "$(id -u)" -ne 0 ]; then
 fi
 
 LOGSTASH_VERSION="${LOGSTASH_VERSION:-8.18.0}"
-REPO_DIR="${REPO_DIR:-/opt/web-analytics}"
+REPO_DIR="${REPO_DIR:-/opt/o11y-cloudfront-batch}"
 
-echo "=== web-analytics Logstash bootstrap ==="
+echo "=== o11y-cloudfront-batch Logstash bootstrap ==="
 
 # ----------------------------------------
 # 1. Install Logstash if not present
@@ -118,7 +118,7 @@ echo "--- Installing systemd --user unit ---"
 mkdir -p "$LOGSTASH_HOME/.config/systemd/user"
 cat > "$LOGSTASH_HOME/.config/systemd/user/logstash.service" <<'SERVICE'
 [Unit]
-Description=Logstash web-analytics pipeline
+Description=Logstash o11y-cloudfront-batch pipeline
 After=network.target
 
 [Service]

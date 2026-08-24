@@ -8,7 +8,7 @@
 # Access: AWS Systems Manager (MCP-SSM-CloudWatch instance profile).
 # No SSH key or inbound security group rules needed.
 #
-# Reads s3_bucket_name from SSM (/pds/web-analytics/s3/bucket_name) so this
+# Reads s3_bucket_name from SSM (/pds/o11y-cloudfront-batch/s3/bucket_name) so this
 # module can be applied independently of the S3 root module.
 #
 # EC2 creation is optional (var.manage_ec2_instance, default true) — set to
@@ -139,7 +139,7 @@ resource "aws_ssm_document" "logstash_runas" {
       maxSessionDuration          = ""
       shellProfile = {
         windows = ""
-        linux   = "cd /opt/web-analytics && export XDG_RUNTIME_DIR=\"/run/user/$(id -u)\""
+        linux   = "cd /opt/o11y-cloudfront-batch && export XDG_RUNTIME_DIR=\"/run/user/$(id -u)\""
       }
     }
   })

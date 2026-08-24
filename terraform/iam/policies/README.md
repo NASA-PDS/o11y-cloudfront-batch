@@ -1,6 +1,6 @@
 # IAM Policies Module
 
-Creates the web-analytics EC2 IAM policy and attaches it to the shared EC2 instance role.
+Creates the o11y-cloudfront-batch EC2 IAM policy and attaches it to the shared EC2 instance role.
 
 > **Requires `iam:CreatePolicy` and `iam:AttachRolePolicy`** — must be applied by a system administrator.
 
@@ -27,8 +27,8 @@ Creates the web-analytics EC2 IAM policy and attaches it to the shared EC2 insta
 
 | Name | Description |
 |---|---|
-| `policy_arn` | ARN of the web-analytics EC2 access policy. |
-| `policy_name` | Name of the web-analytics EC2 access policy. |
+| `policy_arn` | ARN of the o11y-cloudfront-batch EC2 access policy. |
+| `policy_name` | Name of the o11y-cloudfront-batch EC2 access policy. |
 
 ## Deploy
 

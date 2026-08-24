@@ -6,7 +6,7 @@ Deploys the infrastructure for the PDS Web Analytics pipeline:
 - **IAM policy** — grants the Logstash EC2 role read access to S3 and write access to OpenSearch
 - **Logstash EC2** — Amazon Linux 2023 instance running Logstash directly via RPM + systemd
 
-> **OpenSearch** is managed separately in [pdc-observability](https://github.com/NASA-PDS/pdc-observability). Deploy it first — the endpoint is published to SSM and consumed automatically here. Its `opensearch` module bootstraps with `web_analytics_enabled = false`, so Logstash's role isn't actually allowed to write to OpenSearch until someone flips that flag and re-applies it *after* this repo's `iam:deploy` has run — see Step 2 below and pdc-observability's `terraform/README.md#deployment-flow`.
+> **OpenSearch** is managed separately in [pdc-observability-platform](https://github.com/NASA-PDS/pdc-observability-platform). Deploy it first — the endpoint is published to SSM and consumed automatically here. Its `opensearch` module bootstraps with `web_analytics_enabled = false`, so Logstash's role isn't actually allowed to write to OpenSearch until someone flips that flag and re-applies it *after* this repo's `iam:deploy` has run — see Step 2 below and pdc-observability's `terraform/README.md#deployment-flow`.
 
 ```
 terraform/
@@ -21,20 +21,20 @@ terraform/
 
 ```mermaid
 flowchart TD
-    subgraph ext["(1a) pdc-observability"]
+    subgraph ext["(1a) pdc-observability-platform"]
         OS["OpenSearch\nweb_analytics_enabled = false\n(bootstrap)"]
     end
 
-    subgraph phase1["(1b) web-analytics"]
+    subgraph phase1["(1b) o11y-cloudfront-batch"]
         IAM["IAM/Policies\n🔐 Admin"]
         S3["S3 bucket\n🔑 Power-User"]
     end
 
-    subgraph ext2["(2) pdc-observability"]
+    subgraph ext2["(2) pdc-observability-platform"]
         OS2["OpenSearch\nweb_analytics_enabled = true\n(access-policy update only)"]
     end
 
-    subgraph phase2["(3) web-analytics"]
+    subgraph phase2["(3) o11y-cloudfront-batch"]
         LS["Logstash EC2\n🔐 Admin"]
     end
 
@@ -46,11 +46,11 @@ flowchart TD
     S3 -->|"bucket → SSM"| LS
 ```
 
-1. **(1a) Deploy OpenSearch** — See [pdc-observability](https://github.com/NASA-PDS/pdc-observability) (~15-20 min), bootstrapped with `web_analytics_enabled = false` (and `realtime_monitor_enabled` set however cf-realtime-monitor's status warrants — the two are independent)
+1. **(1a) Deploy OpenSearch** — See [pdc-observability-platform](https://github.com/NASA-PDS/pdc-observability-platform) (~15-20 min), bootstrapped with `web_analytics_enabled = false` (and `realtime_monitor_enabled` set however cf-realtime-monitor's status warrants — the two are independent)
 2. **(1b) While OpenSearch provisions**, can be run in parallel with (1a):
    - `task iam:deploy VENUE=dev` 🔐 — requires `iam:CreatePolicy`, `iam:AttachRolePolicy`; publishes `ec2_role_arn` to SSM
    - `task s3:deploy VENUE=dev` — creates the log bucket, publishes name to SSM
-3. **(2) After `iam:deploy` completes**, back in [pdc-observability](https://github.com/NASA-PDS/pdc-observability): set `web_analytics_enabled = true` and re-run `task opensearch:deploy` — this only updates the OpenSearch access policy (adds the Logstash role as a principal), no domain redeployment. Skip this if it's already `true` from a prior deploy.
+3. **(2) After `iam:deploy` completes**, back in [pdc-observability-platform](https://github.com/NASA-PDS/pdc-observability-platform): set `web_analytics_enabled = true` and re-run `task opensearch:deploy` — this only updates the OpenSearch access policy (adds the Logstash role as a principal), no domain redeployment. Skip this if it's already `true` from a prior deploy.
 4. **(3) After all above complete** — `task logstash:deploy VENUE=dev` 🔐 — requires `iam:PassRole`; reads OpenSearch endpoint and bucket name from SSM at plan time. **Note:** the EC2 role won't actually be able to write to OpenSearch until step (2) has run — `terraform apply` here will succeed either way, but Logstash will get 403s from OpenSearch until then.
 
 ---
@@ -72,7 +72,7 @@ flowchart TD
 ### 1. tfvars
 
 tfvars are tracked in the `cds-infra-deploy` repo (private GitLab, not GitHub) at
-`venues/<venue>/web-analytics/{common,s3,logstash,iam-policies}.tfvars`, not in this repo —
+`venues/<venue>/o11y-cloudfront-batch/{common,s3,logstash,iam-policies}.tfvars`, not in this repo —
 `tfvars/`, `s3/tfvars/`, `iam/policies/tfvars/`, and `logstash/tfvars/` here are all gitignored.
 Point Task at a local checkout:
 
@@ -105,7 +105,7 @@ Key values to fill in:
 | File (cds-infra-deploy path shown; `LOCAL=1` uses the repo-local path in parens) | Variable | Notes |
 |---|---|---|
 | `common.tfvars` (`tfvars/common-dev.tfvars`) | `managedby` | Your email address |
-| `common.tfvars` (`tfvars/common-dev.tfvars`) | `resource_prefix`, `ec2_role_name` | `resource_prefix` drives IAM policy names; EC2 is named `pds-web-analytics` (from `component`) |
+| `common.tfvars` (`tfvars/common-dev.tfvars`) | `resource_prefix`, `ec2_role_name` | `resource_prefix` drives IAM policy names; EC2 is named `pds-o11y-cloudfront-batch` (from `component`) |
 | `s3.tfvars` (`s3/tfvars/dev.tfvars`) | `s3_bucket_prefix` | S3 bucket name; may include CI/CD identifiers |
 | `iam-policies.tfvars` (`iam/policies/tfvars/dev.tfvars`) | `logs_s3_bucket_name` | Full S3 bucket name for the IAM policy resource ARN |
 | `logstash.tfvars` (`logstash/tfvars/dev.tfvars`) | `vpc_id`, `ec2_security_group_name`, `s3_cf_bucket_name` | VPC and CloudFront bucket for the EC2 |
@@ -121,9 +121,9 @@ unset AWS_PROFILE  # required for Terraform S3 backend compatibility
 
 ## Deployment — step by step
 
-### Step 0: OpenSearch domain — pdc-observability repo
+### Step 0: OpenSearch domain — pdc-observability-platform repo
 
-Deploy from the [pdc-observability](https://github.com/NASA-PDS/pdc-observability) repo first, bootstrapped with `web_analytics_enabled = false`. The endpoint is published to SSM automatically and consumed here at plan time. The Logstash EC2 role won't be allowed to write to OpenSearch yet — see Step 2.5.
+Deploy from the [pdc-observability-platform](https://github.com/NASA-PDS/pdc-observability-platform) repo first, bootstrapped with `web_analytics_enabled = false`. The endpoint is published to SSM automatically and consumed here at plan time. The Logstash EC2 role won't be allowed to write to OpenSearch yet — see Step 2.5.
 
 ---
 
@@ -145,13 +145,13 @@ task iam:plan   VENUE=dev
 task iam:deploy VENUE=dev
 ```
 
-This publishes `/pds/web-analytics/iam/ec2_role_arn` to SSM.
+This publishes `/pds/o11y-cloudfront-batch/iam/ec2_role_arn` to SSM.
 
 ---
 
-### Step 2.5: Grant OpenSearch access — pdc-observability repo
+### Step 2.5: Grant OpenSearch access — pdc-observability-platform repo
 
-Back in [pdc-observability](https://github.com/NASA-PDS/pdc-observability): set `web_analytics_enabled = true` in the `opensearch` tfvars and re-run `task opensearch:deploy`. This only updates the OpenSearch access policy to add the Logstash role as a principal — no domain redeployment (seconds, not minutes). Skip this if it's already `true` from a prior deploy.
+Back in [pdc-observability-platform](https://github.com/NASA-PDS/pdc-observability-platform): set `web_analytics_enabled = true` in the `opensearch` tfvars and re-run `task opensearch:deploy`. This only updates the OpenSearch access policy to add the Logstash role as a principal — no domain redeployment (seconds, not minutes). Skip this if it's already `true` from a prior deploy.
 
 ---
 
@@ -189,12 +189,12 @@ For an **already-running EC2** (e.g., after recreating the OpenSearch domain, or
 # don't count on landing as logstash automatically:
 aws ssm start-session \
   --target $(aws ssm get-parameter \
-    --name /pds/web-analytics/ec2/logstash_instance_id \
+    --name /pds/o11y-cloudfront-batch/ec2/logstash_instance_id \
     --query Parameter.Value --output text)
 
 # Switch to logstash before doing anything else:
 sudo runuser -l logstash
-cd /opt/web-analytics
+cd /opt/o11y-cloudfront-batch
 
 # Verify what's currently in the env file
 cat /etc/logstash/env
@@ -215,7 +215,7 @@ REPO_BRANCH=<your-branch> S3_CF_BUCKET_NAME=<cf-logs-bucket-name> bash scripts/l
 > it's rare (install/upgrade only).
 
 The deploy script will:
-1. Clone/update the web-analytics repo to `/opt/web-analytics` (owned by `logstash`)
+1. Clone/update the web-analytics repo to `/opt/o11y-cloudfront-batch` (owned by `logstash`)
 2. Copy Logstash pipeline config to `/etc/logstash`
 3. Build `pipelines.yml` and `pipelines/*.conf` from templates
 4. Apply the OpenSearch ECS index template to the new domain
@@ -318,7 +318,7 @@ tail -f /tmp/bad_logs_$(date +%Y-%m).txt
 SSM into the EC2 and run:
 
 ```bash
-bash /opt/web-analytics/scripts/smoke-test.sh
+bash /opt/o11y-cloudfront-batch/scripts/smoke-test.sh
 ```
 
 Checks S3 access, OpenSearch network reachability, OpenSearch SigV4 auth, and Logstash service status. OpenSearch `status=green` is expected; `yellow` is acceptable on a single-node dev cluster (no replicas).
@@ -350,12 +350,12 @@ The deploy script is idempotent — re-running it pulls the latest repo, redeplo
 ```bash
 aws ssm start-session \
   --target $(aws ssm get-parameter \
-    --name /pds/web-analytics/ec2/logstash_instance_id \
+    --name /pds/o11y-cloudfront-batch/ec2/logstash_instance_id \
     --query Parameter.Value --output text)
 
 # Lands as root — switch first:
 sudo runuser -l logstash
-cd /opt/web-analytics
+cd /opt/o11y-cloudfront-batch
 
 S3_CF_BUCKET_NAME=<cf-logs-bucket-name> bash scripts/logstash-deploy.sh
 ```
@@ -397,18 +397,18 @@ task iam:destroy        VENUE=dev   # IAM policy + role attachment     🔐 admi
 task s3:destroy         VENUE=dev   # S3 bucket (does not delete objects)
 ```
 
-OpenSearch teardown is managed in [pdc-observability](https://github.com/NASA-PDS/pdc-observability).
+OpenSearch teardown is managed in [pdc-observability-platform](https://github.com/NASA-PDS/pdc-observability-platform).
 
 ---
 
 ## Architecture notes
 
 - **State files** stored in S3 (`pds-<venue>-<cicd>-infra`):
-  - `web-analytics/s3.tfstate` — S3 log bucket
-  - `web-analytics/iam-policies.tfstate` — IAM policies
-  - `web-analytics/logstash.tfstate` — Logstash EC2
-  - `observability/opensearch.tfstate` — OpenSearch domain (managed in pdc-observability, own bucket/key)
+  - `o11y-cloudfront-batch/s3.tfstate` — S3 log bucket
+  - `o11y-cloudfront-batch/iam-policies.tfstate` — IAM policies
+  - `o11y-cloudfront-batch/logstash.tfstate` — Logstash EC2
+  - `observability/opensearch.tfstate` — OpenSearch domain (managed in pdc-observability-platform, own bucket/key)
 - **Variable naming** — `s3_bucket_prefix` is for the S3 bucket name only (may include CI/CD identifiers like `gh01dc`). `resource_prefix` is for all other resources and should not include CI/CD identifiers.
 - **VPC/SG values** are in tfvars. TODO: source from SSM under `/pds/cds-infra/vpc/` once published.
 - **Logstash sincedb** persists to `/var/lib/logstash/plugins/inputs/s3/` on the EC2 EBS volume (`delete_on_termination = false`) — S3 read position survives restarts and redeployments.
-- **OpenSearch** is managed in [pdc-observability](https://github.com/NASA-PDS/pdc-observability). The endpoint is published to SSM at `/pds/observability/opensearch/opensearch_endpoint` and consumed automatically at plan time.
+- **OpenSearch** is managed in [pdc-observability-platform](https://github.com/NASA-PDS/pdc-observability-platform). The endpoint is published to SSM at `/pds/observability/opensearch/opensearch_endpoint` and consumed automatically at plan time.

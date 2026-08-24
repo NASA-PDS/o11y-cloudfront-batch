@@ -1,12 +1,12 @@
-# Taskfile for web-analytics Terraform
+# Taskfile for o11y-cloudfront-batch Terraform
 # =====================================
 #
 # Modules and their deployment order:
-#   0. pdc-observability     - OpenSearch domain, bootstrapped with web_analytics_enabled=false
+#   0. pdc-observability-platform - OpenSearch domain, bootstrapped with web_analytics_enabled=false
 #                              (deploy first, separate repo)
 #   1. iam/policies/         - IAM policy + role attachment (admin required); publishes
 #                              ec2_role_arn to SSM
-#   1.5. pdc-observability   - re-apply with web_analytics_enabled=true (access-policy update
+#   1.5. pdc-observability-platform - re-apply with web_analytics_enabled=true (access-policy update
 #                              only, separate repo) — Logstash gets 403s from OpenSearch until
 #                              this runs
 #   2. s3/                   - S3 log bucket (Project-Power-User)
@@ -92,7 +92,7 @@ tasks:
                     if [ "{{.LOCAL}}" = "1" ]; then
                         echo "../tfvars/common-{{.VENUE}}.tfvars"
                     elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/web-analytics/common.tfvars"
+                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/o11y-cloudfront-batch/common.tfvars"
                     else
                         echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
                         exit 1
@@ -102,7 +102,7 @@ tasks:
                     if [ "{{.LOCAL}}" = "1" ]; then
                         echo "tfvars/{{.VENUE}}.tfvars"
                     elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/web-analytics/s3.tfvars"
+                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/o11y-cloudfront-batch/s3.tfvars"
                     else
                         echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
                         exit 1
@@ -125,7 +125,7 @@ tasks:
                     if [ "{{.LOCAL}}" = "1" ]; then
                         echo "../tfvars/common-{{.VENUE}}.tfvars"
                     elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/web-analytics/common.tfvars"
+                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/o11y-cloudfront-batch/common.tfvars"
                     else
                         echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
                         exit 1
@@ -135,7 +135,7 @@ tasks:
                     if [ "{{.LOCAL}}" = "1" ]; then
                         echo "tfvars/{{.VENUE}}.tfvars"
                     elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/web-analytics/s3.tfvars"
+                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/o11y-cloudfront-batch/s3.tfvars"
                     else
                         echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
                         exit 1
@@ -157,7 +157,7 @@ tasks:
                     if [ "{{.LOCAL}}" = "1" ]; then
                         echo "../tfvars/common-{{.VENUE}}.tfvars"
                     elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/web-analytics/common.tfvars"
+                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/o11y-cloudfront-batch/common.tfvars"
                     else
                         echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
                         exit 1
@@ -167,7 +167,7 @@ tasks:
                     if [ "{{.LOCAL}}" = "1" ]; then
                         echo "tfvars/{{.VENUE}}.tfvars"
                     elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/web-analytics/s3.tfvars"
+                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/o11y-cloudfront-batch/s3.tfvars"
                     else
                         echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
                         exit 1
@@ -189,7 +189,7 @@ tasks:
                     if [ "{{.LOCAL}}" = "1" ]; then
                         echo "../tfvars/common-{{.VENUE}}.tfvars"
                     elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/web-analytics/common.tfvars"
+                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/o11y-cloudfront-batch/common.tfvars"
                     else
                         echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
                         exit 1
@@ -199,7 +199,7 @@ tasks:
                     if [ "{{.LOCAL}}" = "1" ]; then
                         echo "tfvars/{{.VENUE}}.tfvars"
                     elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/web-analytics/s3.tfvars"
+                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/o11y-cloudfront-batch/s3.tfvars"
                     else
                         echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
                         exit 1
@@ -221,7 +221,7 @@ tasks:
                     if [ "{{.LOCAL}}" = "1" ]; then
                         echo "../tfvars/common-{{.VENUE}}.tfvars"
                     elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/web-analytics/common.tfvars"
+                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/o11y-cloudfront-batch/common.tfvars"
                     else
                         echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
                         exit 1
@@ -231,7 +231,7 @@ tasks:
                     if [ "{{.LOCAL}}" = "1" ]; then
                         echo "tfvars/{{.VENUE}}.tfvars"
                     elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/web-analytics/s3.tfvars"
+                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/o11y-cloudfront-batch/s3.tfvars"
                     else
                         echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
                         exit 1
@@ -276,7 +276,7 @@ tasks:
                     if [ "{{.LOCAL}}" = "1" ]; then
                         echo "../tfvars/common-{{.VENUE}}.tfvars"
                     elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/web-analytics/common.tfvars"
+                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/o11y-cloudfront-batch/common.tfvars"
                     else
                         echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
                         exit 1
@@ -286,7 +286,7 @@ tasks:
                     if [ "{{.LOCAL}}" = "1" ]; then
                         echo "tfvars/{{.VENUE}}.tfvars"
                     elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/web-analytics/logstash.tfvars"
+                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/o11y-cloudfront-batch/logstash.tfvars"
                     else
                         echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
                         exit 1
@@ -309,7 +309,7 @@ tasks:
                     if [ "{{.LOCAL}}" = "1" ]; then
                         echo "../tfvars/common-{{.VENUE}}.tfvars"
                     elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/web-analytics/common.tfvars"
+                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/o11y-cloudfront-batch/common.tfvars"
                     else
                         echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
                         exit 1
@@ -319,7 +319,7 @@ tasks:
                     if [ "{{.LOCAL}}" = "1" ]; then
                         echo "tfvars/{{.VENUE}}.tfvars"
                     elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/web-analytics/logstash.tfvars"
+                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/o11y-cloudfront-batch/logstash.tfvars"
                     else
                         echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
                         exit 1
@@ -341,7 +341,7 @@ tasks:
                     if [ "{{.LOCAL}}" = "1" ]; then
                         echo "../tfvars/common-{{.VENUE}}.tfvars"
                     elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/web-analytics/common.tfvars"
+                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/o11y-cloudfront-batch/common.tfvars"
                     else
                         echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
                         exit 1
@@ -351,7 +351,7 @@ tasks:
                     if [ "{{.LOCAL}}" = "1" ]; then
                         echo "tfvars/{{.VENUE}}.tfvars"
                     elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/web-analytics/logstash.tfvars"
+                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/o11y-cloudfront-batch/logstash.tfvars"
                     else
                         echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
                         exit 1
@@ -373,7 +373,7 @@ tasks:
                     if [ "{{.LOCAL}}" = "1" ]; then
                         echo "../tfvars/common-{{.VENUE}}.tfvars"
                     elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/web-analytics/common.tfvars"
+                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/o11y-cloudfront-batch/common.tfvars"
                     else
                         echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
                         exit 1
@@ -383,7 +383,7 @@ tasks:
                     if [ "{{.LOCAL}}" = "1" ]; then
                         echo "tfvars/{{.VENUE}}.tfvars"
                     elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/web-analytics/logstash.tfvars"
+                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/o11y-cloudfront-batch/logstash.tfvars"
                     else
                         echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
                         exit 1
@@ -405,7 +405,7 @@ tasks:
                     if [ "{{.LOCAL}}" = "1" ]; then
                         echo "../tfvars/common-{{.VENUE}}.tfvars"
                     elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/web-analytics/common.tfvars"
+                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/o11y-cloudfront-batch/common.tfvars"
                     else
                         echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
                         exit 1
@@ -415,7 +415,7 @@ tasks:
                     if [ "{{.LOCAL}}" = "1" ]; then
                         echo "tfvars/{{.VENUE}}.tfvars"
                     elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/web-analytics/logstash.tfvars"
+                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/o11y-cloudfront-batch/logstash.tfvars"
                     else
                         echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
                         exit 1
@@ -460,7 +460,7 @@ tasks:
                     if [ "{{.LOCAL}}" = "1" ]; then
                         echo "../../tfvars/common-{{.VENUE}}.tfvars"
                     elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/web-analytics/common.tfvars"
+                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/o11y-cloudfront-batch/common.tfvars"
                     else
                         echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
                         exit 1
@@ -470,7 +470,7 @@ tasks:
                     if [ "{{.LOCAL}}" = "1" ]; then
                         echo "tfvars/{{.VENUE}}.tfvars"
                     elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/web-analytics/iam-policies.tfvars"
+                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/o11y-cloudfront-batch/iam-policies.tfvars"
                     else
                         echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
                         exit 1
@@ -493,7 +493,7 @@ tasks:
                     if [ "{{.LOCAL}}" = "1" ]; then
                         echo "../../tfvars/common-{{.VENUE}}.tfvars"
                     elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/web-analytics/common.tfvars"
+                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/o11y-cloudfront-batch/common.tfvars"
                     else
                         echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
                         exit 1
@@ -503,7 +503,7 @@ tasks:
                     if [ "{{.LOCAL}}" = "1" ]; then
                         echo "tfvars/{{.VENUE}}.tfvars"
                     elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/web-analytics/iam-policies.tfvars"
+                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/o11y-cloudfront-batch/iam-policies.tfvars"
                     else
                         echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
                         exit 1
@@ -525,7 +525,7 @@ tasks:
                     if [ "{{.LOCAL}}" = "1" ]; then
                         echo "../../tfvars/common-{{.VENUE}}.tfvars"
                     elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/web-analytics/common.tfvars"
+                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/o11y-cloudfront-batch/common.tfvars"
                     else
                         echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
                         exit 1
@@ -535,7 +535,7 @@ tasks:
                     if [ "{{.LOCAL}}" = "1" ]; then
                         echo "tfvars/{{.VENUE}}.tfvars"
                     elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/web-analytics/iam-policies.tfvars"
+                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/o11y-cloudfront-batch/iam-policies.tfvars"
                     else
                         echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
                         exit 1
@@ -557,7 +557,7 @@ tasks:
                     if [ "{{.LOCAL}}" = "1" ]; then
                         echo "../../tfvars/common-{{.VENUE}}.tfvars"
                     elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/web-analytics/common.tfvars"
+                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/o11y-cloudfront-batch/common.tfvars"
                     else
                         echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
                         exit 1
@@ -567,7 +567,7 @@ tasks:
                     if [ "{{.LOCAL}}" = "1" ]; then
                         echo "tfvars/{{.VENUE}}.tfvars"
                     elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/web-analytics/iam-policies.tfvars"
+                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/o11y-cloudfront-batch/iam-policies.tfvars"
                     else
                         echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
                         exit 1
@@ -589,7 +589,7 @@ tasks:
                     if [ "{{.LOCAL}}" = "1" ]; then
                         echo "../../tfvars/common-{{.VENUE}}.tfvars"
                     elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/web-analytics/common.tfvars"
+                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/o11y-cloudfront-batch/common.tfvars"
                     else
                         echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
                         exit 1
@@ -599,7 +599,7 @@ tasks:
                     if [ "{{.LOCAL}}" = "1" ]; then
                         echo "tfvars/{{.VENUE}}.tfvars"
                     elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/web-analytics/iam-policies.tfvars"
+                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/o11y-cloudfront-batch/iam-policies.tfvars"
                     else
                         echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
                         exit 1

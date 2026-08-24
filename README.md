@@ -53,11 +53,11 @@ flowchart LR
 
     S3["pds-logs\nS3 bucket"]
 
-    subgraph wa["web-analytics"]
+    subgraph wa["o11y-cloudfront-batch"]
         LS["Logstash EC2\n(parse + enrich)"]
     end
 
-    subgraph obs["pdc-observability"]
+    subgraph obs["pdc-observability-platform"]
         OS["OpenSearch"]
     end
 
@@ -69,7 +69,7 @@ flowchart LR
     OS --> DASH
 ```
 
-PDS nodes upload access logs to a shared `pds-logs` S3 bucket using Data Upload Manager. Logstash polls S3, parses logs into ECS v8 format, and writes to OpenSearch. OpenSearch is a shared platform managed in [pdc-observability](https://github.com/NASA-PDS/pdc-observability) — both this pipeline and [cloudfront-realtime-monitor](https://github.com/NASA-PDS/cloudfront-realtime-monitor) write to it. Analysts query via OpenSearch Dashboards.
+PDS nodes upload access logs to a shared `pds-logs` S3 bucket using Data Upload Manager. Logstash polls S3, parses logs into ECS v8 format, and writes to OpenSearch. OpenSearch is a shared platform managed in [pdc-observability-platform](https://github.com/NASA-PDS/pdc-observability-platform) — both this pipeline and [cloudfront-realtime-monitor](https://github.com/NASA-PDS/cloudfront-realtime-monitor) write to it. Analysts query via OpenSearch Dashboards.
 
 ## Prerequisites
 
@@ -96,8 +96,8 @@ sudo dnf install gettext
 
 ### 1. Clone the Repository
 ```bash
-git clone https://github.com/NASA-PDS/web-analytics.git
-cd web-analytics
+git clone https://github.com/NASA-PDS/o11y-cloudfront-batch.git
+cd o11y-cloudfront-batch
 
 # Create WEB_ANALYTICS_HOME environment variable
 echo 'export WEB_ANALYTICS_HOME="$(pwd)"' >> ~/.bashrc
@@ -128,7 +128,7 @@ cp .env.example .env
 S3_BUCKET_NAME=your-pds-logs-bucket
 S3_CF_BUCKET_NAME=               # CloudFront logs bucket (EN only); leave empty to skip
 OPENSEARCH_URL=https://your-opensearch-domain.us-west-2.es.amazonaws.com
-INDEX_PREFIX=pds-web-analytics
+INDEX_PREFIX=pds-o11y-cloudfront-batch
 AWS_REGION=us-west-2
 ```
 
@@ -155,7 +155,7 @@ On the EC2, `logstash-deploy.sh` applies this automatically via the AWS CLI. To 
 
 ```
 GET _cat/templates
-PUT _index_template/pds-web-analytics
+PUT _index_template/pds-o11y-cloudfront-batch
 # paste config/opensearch/ecs-8.17-custom-template.json
 GET _cat/templates
 ```
@@ -254,7 +254,7 @@ s3-log-sync -c config/config.yaml -d /var/log/pds --aws-profile pds-analytics
 s3-log-sync -c config/config.yaml -d /var/log/pds --no-gzip
 
 # Set up as a cron job (example: every hour)
-0 * * * * cd /path/to/web-analytics && s3-log-sync -c config/config.yaml -d /var/log/pds
+0 * * * * cd /path/to/o11y-cloudfront-batch && s3-log-sync -c config/config.yaml -d /var/log/pds
 ```
 
 **Note**: The `--aws-profile` argument defaults to the `AWS_PROFILE` environment variable if it's set. If neither is provided, the command will fail with a helpful error message. All S3 uploads are performed using boto3 (not the AWS CLI).
@@ -277,17 +277,17 @@ ARN — that may not be in place). The reliable path is always:
 ```bash
 aws ssm start-session \
   --target $(aws ssm get-parameter \
-    --name /pds/web-analytics/ec2/logstash_instance_id \
+    --name /pds/o11y-cloudfront-batch/ec2/logstash_instance_id \
     --query Parameter.Value --output text)
 
 # You land as root — switch in place before running anything below:
 sudo runuser -l logstash
-cd /opt/web-analytics
+cd /opt/o11y-cloudfront-batch
 ```
 
 (`su - logstash` works the same way.) If your IAM identity does have the
 Run-As grant, you can skip the switch by adding `--document-name $(aws ssm
-get-parameter --name /pds/web-analytics/ssm/logstash_runas_document --query
+get-parameter --name /pds/o11y-cloudfront-batch/ssm/logstash_runas_document --query
 Parameter.Value --output text)` to `start-session` — but don't rely on it
 without confirming it actually lands you as `logstash` first.
 
@@ -358,7 +358,7 @@ systemctl --user start logstash
 
 **Smoke test:**
 ```bash
-bash /opt/web-analytics/scripts/smoke-test.sh
+bash /opt/o11y-cloudfront-batch/scripts/smoke-test.sh
 ```
 
 > An admin occasionally needs `sudo bash scripts/logstash-bootstrap.sh` — but
@@ -544,7 +544,7 @@ stays flat usually means it's stuck (e.g. blocked on the OpenSearch output).
 
 ```bash
 # From the EC2 — uses instance role credentials automatically
-bash /opt/web-analytics/scripts/smoke-test.sh
+bash /opt/o11y-cloudfront-batch/scripts/smoke-test.sh
 ```
 
 ## Data Processing Overview
@@ -615,7 +615,7 @@ The system processes logs from the following PDS nodes:
 ### Project Structure
 
 ```
-web-analytics/
+o11y-cloudfront-batch/
 ├── config/                    # Configuration files
 │   ├── logstash/             # Logstash configurations
 │   └── config_example.yaml   # S3 sync configuration template
@@ -680,7 +680,7 @@ These hooks then will check for any future commits that might contain secrets. T
    - If Logstash itself isn't installed yet, an admin needs to run `sudo bash scripts/logstash-bootstrap.sh` first
 
 2. **No data in OpenSearch**
-   - Run smoke test: `bash /opt/web-analytics/scripts/smoke-test.sh`
+   - Run smoke test: `bash /opt/o11y-cloudfront-batch/scripts/smoke-test.sh`
    - Check S3 sincedb files: `ls -la /var/lib/logstash/plugins/inputs/s3/`
    - Check Logstash logs for S3 read errors: `tail -n 100 /var/log/logstash/logstash-plain.log`
 

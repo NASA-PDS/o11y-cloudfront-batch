@@ -52,7 +52,7 @@ variable "manage_ec2_instance" {
 }
 
 variable "existing_instance_id" {
-  description = "Instance ID of an existing EC2 to publish as /pds/web-analytics/ec2/logstash_instance_id. Required when manage_ec2_instance = false; ignored otherwise."
+  description = "Instance ID of an existing EC2 to publish as /pds/o11y-cloudfront-batch/ec2/logstash_instance_id. Required when manage_ec2_instance = false; ignored otherwise."
   type        = string
   default     = ""
 }
@@ -95,7 +95,7 @@ variable "mcp_ami_owner_id" {
 }
 
 variable "repo_branch" {
-  description = "Branch of the web-analytics repo to clone at EC2 first boot."
+  description = "Branch of the o11y-cloudfront-batch repo to clone at EC2 first boot."
   type        = string
   default     = "main"
 }

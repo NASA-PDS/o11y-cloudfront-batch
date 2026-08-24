@@ -1,12 +1,12 @@
 #!/bin/bash
 # logstash-deploy.sh — Deploy config and (re)start Logstash on the
-# web-analytics EC2. No sudo required — run entirely as the `logstash` user.
+# o11y-cloudfront-batch EC2. No sudo required — run entirely as the `logstash` user.
 #
 # Safe to re-run: pulls latest config, updates the env file, and restarts
 # the systemd --user logstash service.
 #
 # Usage (as the logstash user — e.g. an SSM Run-As session):
-#   bash /opt/web-analytics/scripts/logstash-deploy.sh
+#   bash /opt/o11y-cloudfront-batch/scripts/logstash-deploy.sh
 #
 # Requires scripts/logstash-bootstrap.sh to have been run first (root, once)
 # to install Logstash and provision this account — this script will refuse
@@ -49,9 +49,9 @@ if [ "$(id -u)" -eq 0 ]; then
   exit 1
 fi
 
-REPO_URL="https://github.com/NASA-PDS/web-analytics.git"
+REPO_URL="https://github.com/NASA-PDS/o11y-cloudfront-batch.git"
 REPO_BRANCH="${REPO_BRANCH:-main}"
-REPO_DIR="${REPO_DIR:-/opt/web-analytics}"
+REPO_DIR="${REPO_DIR:-/opt/o11y-cloudfront-batch}"
 LOGSTASH_CONFIG_DIR="/etc/logstash"
 INDEX_PREFIX="${INDEX_PREFIX:-pds-weblogs}"
 
@@ -80,7 +80,7 @@ OPENSEARCH_ENDPOINT="${OPENSEARCH_ENDPOINT:-$(aws ssm get-parameter \
   --region "$AWS_REGION" \
   --query Parameter.Value --output text)}"
 
-echo "=== web-analytics Logstash deploy ==="
+echo "=== o11y-cloudfront-batch Logstash deploy ==="
 echo "Repo:     $REPO_URL ($REPO_BRANCH)"
 echo "Endpoint: $OPENSEARCH_ENDPOINT"
 if [ -z "$S3_CF_BUCKET_NAME" ]; then
@@ -96,7 +96,7 @@ echo ""
 # ----------------------------------------
 # 1. Clone or update the repo
 # ----------------------------------------
-echo "--- Deploying web-analytics repo ---"
+echo "--- Deploying o11y-cloudfront-batch repo ---"
 if [ -d "$REPO_DIR/.git" ]; then
   echo "Repo already exists — pulling latest $REPO_BRANCH"
   git -C "$REPO_DIR" fetch origin
@@ -128,7 +128,7 @@ TEMPLATE_FILE="$REPO_DIR/config/opensearch/ecs-8.17-custom-template.json"
 TEMPLATE_RESPONSE_FILE="$(mktemp)"
 CURL_EXIT=0
 RESPONSE=$(curl -s --connect-timeout 10 --max-time 60 -o "$TEMPLATE_RESPONSE_FILE" -w "%{http_code}" \
-  -X PUT "https://${OPENSEARCH_ENDPOINT}/_index_template/pds-web-analytics" \
+  -X PUT "https://${OPENSEARCH_ENDPOINT}/_index_template/pds-o11y-cloudfront-batch" \
   -H 'Content-Type: application/json' \
   -H "x-amz-security-token: ${AWS_SESSION_TOKEN}" \
   --aws-sigv4 "aws:amz:${AWS_REGION}:es" \
@@ -156,7 +156,7 @@ echo "--- Configuring Logstash service ---"
 ENV_FILE="$LOGSTASH_CONFIG_DIR/env"
 
 S3_BUCKET_NAME="${S3_BUCKET_NAME:-$(aws ssm get-parameter \
-  --name /pds/web-analytics/s3/bucket_name \
+  --name /pds/o11y-cloudfront-batch/s3/bucket_name \
   --region "$AWS_REGION" \
   --query Parameter.Value --output text)}"
 

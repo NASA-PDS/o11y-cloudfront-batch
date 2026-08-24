@@ -133,7 +133,7 @@ The Logstash configuration uses a **modular template system**:
 ### Package Structure
 
 This is a Python namespace package under the `pds` namespace:
-- Package name: `pds-web-analytics`
+- Package name: `pds-o11y-cloudfront-batch`
 - Namespace: `pds.web_analytics`
 - Source location: `src/pds/web_analytics/`
 - Version: Read from `src/pds/web_analytics/VERSION.txt`
@@ -215,7 +215,7 @@ Switch in place immediately after connecting:
 
 ```bash
 sudo runuser -l logstash    # or: su - logstash
-cd /opt/web-analytics
+cd /opt/o11y-cloudfront-batch
 ```
 
 A custom SSM Run-As document (`aws_ssm_document.logstash_runas` in

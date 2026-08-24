@@ -9,7 +9,7 @@ locals {
 }
 
 module "web_analytics" {
-  source = "./web-analytics"
+  source = "./web-analytics-batch"
 
   aws_region             = var.aws_region
   partition              = var.partition

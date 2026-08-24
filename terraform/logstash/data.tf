@@ -1,9 +1,9 @@
 data "aws_caller_identity" "current" {}
 
-# Reads s3_bucket_name from SSM (/pds/web-analytics/s3/bucket_name) so this
+# Reads s3_bucket_name from SSM (/pds/o11y-cloudfront-batch/s3/bucket_name) so this
 # module can be applied independently of the S3 root module.
 data "aws_ssm_parameter" "s3_bucket_name" {
-  name = "/pds/web-analytics/s3/bucket_name"
+  name = "/pds/o11y-cloudfront-batch/s3/bucket_name"
 }
 
 data "aws_ssm_parameter" "opensearch_endpoint" {

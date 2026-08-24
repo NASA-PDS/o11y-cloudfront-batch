@@ -2,7 +2,7 @@
 
 Deploys a Logstash EC2 instance (Amazon Linux 2023, RPM install) that reads logs from S3 and writes to OpenSearch.
 
-Reads the S3 bucket name and OpenSearch endpoint from SSM at plan time — deploy the S3 and pdc-observability OpenSearch modules first.
+Reads the S3 bucket name and OpenSearch endpoint from SSM at plan time — deploy the S3 and pdc-observability-platform OpenSearch modules first.
 
 EC2 creation is optional (`manage_ec2_instance`, default `true`) — production
 will likely reuse an existing EC2, in which case this module only manages
@@ -16,9 +16,9 @@ below.
 
 - `aws_launch_template.logstash`, `aws_instance.logstash` — EC2 launch template + instance, only created when `manage_ec2_instance = true`; userdata installs Logstash via RPM (root, `logstash-bootstrap.sh`) then deploys config and starts Logstash as a `systemd --user` service under the `logstash` account (`logstash-deploy.sh`). No SSH; access via SSM Session Manager.
 - `aws_ssm_document.logstash_runas` — custom SSM Session document (Run-As `logstash`) so operators never need sudo for day-2 ops; always created, works against any instance (created here or existing)
-- `aws_ssm_parameter.ec2_role_arn` — publishes EC2 role ARN to `/pds/web-analytics/iam/ec2_role_arn`
-- `aws_ssm_parameter.logstash_instance_id` — publishes the instance ID (created, or `existing_instance_id`) to `/pds/web-analytics/ec2/logstash_instance_id`
-- `aws_ssm_parameter.logstash_runas_document` — publishes the Run-As document name to `/pds/web-analytics/ssm/logstash_runas_document`
+- `aws_ssm_parameter.ec2_role_arn` — publishes EC2 role ARN to `/pds/o11y-cloudfront-batch/iam/ec2_role_arn`
+- `aws_ssm_parameter.logstash_instance_id` — publishes the instance ID (created, or `existing_instance_id`) to `/pds/o11y-cloudfront-batch/ec2/logstash_instance_id`
+- `aws_ssm_parameter.logstash_runas_document` — publishes the Run-As document name to `/pds/o11y-cloudfront-batch/ssm/logstash_runas_document`
 
 ### Access model
 
@@ -52,8 +52,8 @@ upgrade.
 
 | Parameter | Published by |
 |---|---|
-| `/pds/web-analytics/s3/bucket_name` | `s3` module |
-| `/pds/observability/opensearch/opensearch_endpoint` | `pdc-observability` repo |
+| `/pds/o11y-cloudfront-batch/s3/bucket_name` | `s3` module |
+| `/pds/observability/opensearch/opensearch_endpoint` | `pdc-observability-platform` repo |
 
 ## Inputs
 
@@ -106,8 +106,8 @@ existing_instance_id = "i-0123456789abcdef0"
 ```
 
 `task logstash:deploy` then only creates/updates the SSM Run-As document and
-publishes `/pds/web-analytics/ec2/logstash_instance_id` (from
-`existing_instance_id`) and `/pds/web-analytics/iam/ec2_role_arn` — it never
+publishes `/pds/o11y-cloudfront-batch/ec2/logstash_instance_id` (from
+`existing_instance_id`) and `/pds/o11y-cloudfront-batch/iam/ec2_role_arn` — it never
 touches the EC2 itself.
 
 **Connecting to the box is entirely outside this module's control.** These
@@ -140,13 +140,13 @@ however you reach the box:
 
 # 2. Install git and clone the repo — logstash-bootstrap.sh needs it on disk first
 sudo dnf install -y git --quiet
-sudo git clone --branch main https://github.com/NASA-PDS/web-analytics.git /opt/web-analytics
+sudo git clone --branch main https://github.com/NASA-PDS/o11y-cloudfront-batch.git /opt/o11y-cloudfront-batch
 
 # 3. Root, one-time: installs Logstash + plugins, and provisions the
 #    logstash account (home dir, login shell, linger, nofile limits,
 #    systemd --user unit) — see scripts/logstash-bootstrap.sh
-sudo LOGSTASH_VERSION=8.18.0 REPO_DIR=/opt/web-analytics \
-  bash /opt/web-analytics/scripts/logstash-bootstrap.sh
+sudo LOGSTASH_VERSION=8.18.0 REPO_DIR=/opt/o11y-cloudfront-batch \
+  bash /opt/o11y-cloudfront-batch/scripts/logstash-bootstrap.sh
 
 # 4. As the logstash user, no sudo: deploy config and start the service —
 #    see scripts/logstash-deploy.sh
@@ -166,10 +166,10 @@ sudo runuser -l logstash
 # You're now in a real login shell as logstash — everything below is a plain
 # command, no more sudo/runuser wrapping needed for the rest of this session.
 export XDG_RUNTIME_DIR="/run/user/$(id -u)"
-cd /opt/web-analytics
+cd /opt/o11y-cloudfront-batch
 
 AWS_REGION=us-west-2 \
-S3_BUCKET_NAME=$(aws ssm get-parameter --name /pds/web-analytics/s3/bucket_name --query Parameter.Value --output text) \
+S3_BUCKET_NAME=$(aws ssm get-parameter --name /pds/o11y-cloudfront-batch/s3/bucket_name --query Parameter.Value --output text) \
 OPENSEARCH_ENDPOINT=$(aws ssm get-parameter --name /pds/observability/opensearch/opensearch_endpoint --query Parameter.Value --output text) \
 INDEX_PREFIX=pds-weblogs \
 S3_CF_BUCKET_NAME=<cf-logs-bucket-name-or-explicit-empty-string> \
@@ -212,8 +212,8 @@ SSM Run-As document:
 
 ```bash
 aws ssm start-session \
-  --target $(aws ssm get-parameter --name /pds/web-analytics/ec2/logstash_instance_id --query Parameter.Value --output text) \
-  --document-name $(aws ssm get-parameter --name /pds/web-analytics/ssm/logstash_runas_document --query Parameter.Value --output text)
+  --target $(aws ssm get-parameter --name /pds/o11y-cloudfront-batch/ec2/logstash_instance_id --query Parameter.Value --output text) \
+  --document-name $(aws ssm get-parameter --name /pds/o11y-cloudfront-batch/ssm/logstash_runas_document --query Parameter.Value --output text)
 ```
 
 If that still lands you as `root` (missing IAM grant on the document — see

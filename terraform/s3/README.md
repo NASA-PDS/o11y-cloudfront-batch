@@ -6,13 +6,13 @@ Creates the S3 log bucket for PDS Web Analytics and publishes its name to SSM.
 
 - `module.s3_bucket` — S3 bucket via [pds-tf-modules](https://github.com/NASA-PDS/pds-tf-modules) with SSE, public-access blocks disabled (enforced at the account level), and an EC2-role allow + SSL-only deny bucket policy
 - `aws_s3_bucket_lifecycle_configuration.lifecycle` — aborts incomplete multipart uploads after 7 days; transitions all objects to Intelligent-Tiering immediately
-- `aws_ssm_parameter.s3_bucket_name` — publishes the bucket name to `/pds/web-analytics/s3/bucket_name` for consumption by the logstash module
+- `aws_ssm_parameter.s3_bucket_name` — publishes the bucket name to `/pds/o11y-cloudfront-batch/s3/bucket_name` for consumption by the logstash module
 
 ## Inputs
 
 | Name | Type | Default | Description |
 |---|---|---|---|
-| `s3_bucket_prefix` | `string` | — | Prefix for the S3 bucket name (e.g. `pds-dev-gh01dc`). Bucket is named `<prefix>-web-analytics`. |
+| `s3_bucket_prefix` | `string` | — | Prefix for the S3 bucket name (e.g. `pds-dev-gh01dc`). Bucket is named `<prefix>-web-analytics-batch`. |
 | `ec2_role_name` | `string` | — | Existing EC2 IAM role name — granted `s3:*` on the bucket. |
 | `aws_region` | `string` | `us-west-2` | AWS region. |
 | `partition` | `string` | `aws` | AWS partition. |

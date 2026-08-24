@@ -6,10 +6,10 @@ set -euo pipefail
 # be re-run later without going back through userdata.
 dnf install -y git --quiet
 
-REPO_DIR="/opt/web-analytics"
+REPO_DIR="/opt/o11y-cloudfront-batch"
 REPO_BRANCH="${repo_branch}"
 
-git clone --branch "$REPO_BRANCH" https://github.com/NASA-PDS/web-analytics.git "$REPO_DIR"
+git clone --branch "$REPO_BRANCH" https://github.com/NASA-PDS/o11y-cloudfront-batch.git "$REPO_DIR"
 
 # Root, one-time: packages, Logstash RPM/plugins, provision the logstash
 # account (home dir, shell, linger, nofile limits, systemd --user unit).

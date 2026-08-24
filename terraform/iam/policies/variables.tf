@@ -37,7 +37,7 @@ variable "tenant" {
 
 variable "component" {
   type    = string
-  default = "web-analytics"
+  default = "o11y-cloudfront-batch"
 }
 
 variable "cicd" {
