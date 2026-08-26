@@ -4,7 +4,7 @@ data "aws_ssm_parameter" "opensearch_arn" {
   name = "/pds/o11y-platform/opensearch/opensearch_arn"
 }
 
-data "aws_iam_policy_document" "ec2_web_analytics_access" {
+data "aws_iam_policy_document" "ec2_o11y_cloudfront_batch_access" {
   statement {
     effect = "Allow"
     actions = [
