@@ -6,7 +6,7 @@ Creates the o11y-cloudfront-batch EC2 IAM policy and attaches it to the shared E
 
 ## Resources
 
-- `module.web_analytics` — IAM policy granting the Logstash EC2 role read access to S3 and write access to OpenSearch; attaches the policy to `ec2_role_name`
+- `module.o11y_cloudfront_batch` — IAM policy granting the Logstash EC2 role read access to S3 and write access to OpenSearch; attaches the policy to `ec2_role_name`
 
 ## Inputs
 

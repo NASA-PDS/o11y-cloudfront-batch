@@ -76,7 +76,7 @@ fi
 
 AWS_REGION="${AWS_REGION:-us-west-2}"
 OPENSEARCH_ENDPOINT="${OPENSEARCH_ENDPOINT:-$(aws ssm get-parameter \
-  --name /pds/observability/opensearch/opensearch_endpoint \
+  --name /pds/o11y-platform/opensearch/opensearch_endpoint \
   --region "$AWS_REGION" \
   --query Parameter.Value --output text)}"
 

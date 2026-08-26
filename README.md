@@ -1,4 +1,4 @@
-# PDS Web Analytics
+# PDS o11y-cloudfront-batch
 
 A comprehensive web analytics system for the Planetary Data System (PDS) that processes and analyzes web access logs from multiple PDS nodes using Logstash, OpenSearch, and AWS services.
 
@@ -57,7 +57,7 @@ flowchart LR
         LS["Logstash EC2\n(parse + enrich)"]
     end
 
-    subgraph obs["pdc-observability-platform"]
+    subgraph obs["o11y-platform"]
         OS["OpenSearch"]
     end
 
@@ -69,7 +69,7 @@ flowchart LR
     OS --> DASH
 ```
 
-PDS nodes upload access logs to a shared `pds-logs` S3 bucket using Data Upload Manager. Logstash polls S3, parses logs into ECS v8 format, and writes to OpenSearch. OpenSearch is a shared platform managed in [pdc-observability-platform](https://github.com/NASA-PDS/pdc-observability-platform) — both this pipeline and [cloudfront-realtime-monitor](https://github.com/NASA-PDS/cloudfront-realtime-monitor) write to it. Analysts query via OpenSearch Dashboards.
+PDS nodes upload access logs to a shared `pds-logs` S3 bucket using Data Upload Manager. Logstash polls S3, parses logs into ECS v8 format, and writes to OpenSearch. OpenSearch is a shared platform managed in [o11y-platform](https://github.com/NASA-PDS/o11y-platform) — both this pipeline and [o11y-cloudfront-streaming](https://github.com/NASA-PDS/o11y-cloudfront-streaming) write to it. Analysts query via OpenSearch Dashboards.
 
 ## Prerequisites
 

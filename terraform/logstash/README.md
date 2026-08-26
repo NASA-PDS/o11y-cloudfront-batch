@@ -2,7 +2,7 @@
 
 Deploys a Logstash EC2 instance (Amazon Linux 2023, RPM install) that reads logs from S3 and writes to OpenSearch.
 
-Reads the S3 bucket name and OpenSearch endpoint from SSM at plan time — deploy the S3 and pdc-observability-platform OpenSearch modules first.
+Reads the S3 bucket name and OpenSearch endpoint from SSM at plan time — deploy the S3 and o11y-platform OpenSearch modules first.
 
 EC2 creation is optional (`manage_ec2_instance`, default `true`) — production
 will likely reuse an existing EC2, in which case this module only manages
@@ -53,7 +53,7 @@ upgrade.
 | Parameter | Published by |
 |---|---|
 | `/pds/o11y-cloudfront-batch/s3/bucket_name` | `s3` module |
-| `/pds/o11y-platform/opensearch/opensearch_endpoint` | `pdc-observability-platform` repo |
+| `/pds/o11y-platform/opensearch/opensearch_endpoint` | `o11y-platform` repo |
 
 ## Inputs
 

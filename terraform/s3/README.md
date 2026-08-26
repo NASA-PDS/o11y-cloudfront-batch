@@ -1,6 +1,6 @@
 # S3 Module
 
-Creates the S3 log bucket for PDS Web Analytics and publishes its name to SSM.
+Creates the S3 log bucket for o11y-cloudfront-batch and publishes its name to SSM.
 
 ## Resources
 
@@ -26,7 +26,7 @@ Creates the S3 log bucket for PDS Web Analytics and publishes its name to SSM.
 
 | Name | Description |
 |---|---|
-| `s3_bucket_name` | Name of the S3 bucket created for web analytics logs. |
+| `s3_bucket_name` | Name of the S3 bucket created for o11y-cloudfront-batch logs. |
 | `s3_bucket_arn` | ARN of the S3 bucket. |
 
 ## Deploy

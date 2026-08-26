@@ -28,7 +28,7 @@ def check(label, fn):
         ok = False
 
 S3_BUCKET  = ssm.get_parameter(Name='/pds/o11y-cloudfront-batch/s3/bucket_name')['Parameter']['Value']
-ENDPOINT   = ssm.get_parameter(Name='/pds/observability/opensearch/opensearch_endpoint')['Parameter']['Value']
+ENDPOINT   = ssm.get_parameter(Name='/pds/o11y-platform/opensearch/opensearch_endpoint')['Parameter']['Value']
 
 # 1. S3 access
 check('S3 bucket accessible',

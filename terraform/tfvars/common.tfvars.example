@@ -4,7 +4,7 @@
 
 aws_region = "us-west-2"
 tenant     = "en"
-component  = "web-analytics"
+component  = "o11y-cloudfront-batch"
 cicd       = "terraform"
 managedby  = "<your-email>"
 

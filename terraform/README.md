@@ -1,4 +1,4 @@
-# PDS Web Analytics — Terraform
+# o11y-cloudfront-batch — Terraform
 
 Deploys the infrastructure for the PDS Web Analytics pipeline:
 
@@ -6,7 +6,7 @@ Deploys the infrastructure for the PDS Web Analytics pipeline:
 - **IAM policy** — grants the Logstash EC2 role read access to S3 and write access to OpenSearch
 - **Logstash EC2** — Amazon Linux 2023 instance running Logstash directly via RPM + systemd
 
-> **OpenSearch** is managed separately in [pdc-observability-platform](https://github.com/NASA-PDS/pdc-observability-platform). Deploy it first — the endpoint is published to SSM and consumed automatically here. Its `opensearch` module bootstraps with `web_analytics_enabled = false`, so Logstash's role isn't actually allowed to write to OpenSearch until someone flips that flag and re-applies it *after* this repo's `iam:deploy` has run — see Step 2 below and pdc-observability's `terraform/README.md#deployment-flow`.
+> **OpenSearch** is managed separately in [o11y-platform](https://github.com/NASA-PDS/o11y-platform). Deploy it first — the endpoint is published to SSM and consumed automatically here. Its `opensearch` module bootstraps with `o11y_cloudfront_batch_enabled = false`, so Logstash's role isn't actually allowed to write to OpenSearch until someone flips that flag and re-applies it *after* this repo's `iam:deploy` has run — see Step 2 below and o11y-platform's `terraform/README.md#deployment-flow`.
 
 ```
 terraform/
@@ -21,8 +21,8 @@ terraform/
 
 ```mermaid
 flowchart TD
-    subgraph ext["(1a) pdc-observability-platform"]
-        OS["OpenSearch\nweb_analytics_enabled = false\n(bootstrap)"]
+    subgraph ext["(1a) o11y-platform"]
+        OS["OpenSearch\no11y_cloudfront_batch_enabled = false\n(bootstrap)"]
     end
 
     subgraph phase1["(1b) o11y-cloudfront-batch"]
@@ -30,8 +30,8 @@ flowchart TD
         S3["S3 bucket\n🔑 Power-User"]
     end
 
-    subgraph ext2["(2) pdc-observability-platform"]
-        OS2["OpenSearch\nweb_analytics_enabled = true\n(access-policy update only)"]
+    subgraph ext2["(2) o11y-platform"]
+        OS2["OpenSearch\no11y_cloudfront_batch_enabled = true\n(access-policy update only)"]
     end
 
     subgraph phase2["(3) o11y-cloudfront-batch"]
@@ -46,11 +46,11 @@ flowchart TD
     S3 -->|"bucket → SSM"| LS
 ```
 
-1. **(1a) Deploy OpenSearch** — See [pdc-observability-platform](https://github.com/NASA-PDS/pdc-observability-platform) (~15-20 min), bootstrapped with `web_analytics_enabled = false` (and `realtime_monitor_enabled` set however cf-realtime-monitor's status warrants — the two are independent)
+1. **(1a) Deploy OpenSearch** — See [o11y-platform](https://github.com/NASA-PDS/o11y-platform) (~15-20 min), bootstrapped with `o11y_cloudfront_batch_enabled = false` (and `o11y_cloudfront_streaming_enabled` set however o11y-cloudfront-streaming's status warrants — the two are independent)
 2. **(1b) While OpenSearch provisions**, can be run in parallel with (1a):
    - `task iam:deploy VENUE=dev` 🔐 — requires `iam:CreatePolicy`, `iam:AttachRolePolicy`; publishes `ec2_role_arn` to SSM
    - `task s3:deploy VENUE=dev` — creates the log bucket, publishes name to SSM
-3. **(2) After `iam:deploy` completes**, back in [pdc-observability-platform](https://github.com/NASA-PDS/pdc-observability-platform): set `web_analytics_enabled = true` and re-run `task opensearch:deploy` — this only updates the OpenSearch access policy (adds the Logstash role as a principal), no domain redeployment. Skip this if it's already `true` from a prior deploy.
+3. **(2) After `iam:deploy` completes**, back in [o11y-platform](https://github.com/NASA-PDS/o11y-platform): set `o11y_cloudfront_batch_enabled = true` and re-run `task opensearch:deploy` — this only updates the OpenSearch access policy (adds the Logstash role as a principal), no domain redeployment. Skip this if it's already `true` from a prior deploy.
 4. **(3) After all above complete** — `task logstash:deploy VENUE=dev` 🔐 — requires `iam:PassRole`; reads OpenSearch endpoint and bucket name from SSM at plan time. **Note:** the EC2 role won't actually be able to write to OpenSearch until step (2) has run — `terraform apply` here will succeed either way, but Logstash will get 403s from OpenSearch until then.
 
 ---
@@ -121,9 +121,9 @@ unset AWS_PROFILE  # required for Terraform S3 backend compatibility
 
 ## Deployment — step by step
 
-### Step 0: OpenSearch domain — pdc-observability-platform repo
+### Step 0: OpenSearch domain — o11y-platform repo
 
-Deploy from the [pdc-observability-platform](https://github.com/NASA-PDS/pdc-observability-platform) repo first, bootstrapped with `web_analytics_enabled = false`. The endpoint is published to SSM automatically and consumed here at plan time. The Logstash EC2 role won't be allowed to write to OpenSearch yet — see Step 2.5.
+Deploy from the [o11y-platform](https://github.com/NASA-PDS/o11y-platform) repo first, bootstrapped with `o11y_cloudfront_batch_enabled = false`. The endpoint is published to SSM automatically and consumed here at plan time. The Logstash EC2 role won't be allowed to write to OpenSearch yet — see Step 2.5.
 
 ---
 
@@ -149,9 +149,9 @@ This publishes `/pds/o11y-cloudfront-batch/iam/ec2_role_arn` to SSM.
 
 ---
 
-### Step 2.5: Grant OpenSearch access — pdc-observability-platform repo
+### Step 2.5: Grant OpenSearch access — o11y-platform repo
 
-Back in [pdc-observability-platform](https://github.com/NASA-PDS/pdc-observability-platform): set `web_analytics_enabled = true` in the `opensearch` tfvars and re-run `task opensearch:deploy`. This only updates the OpenSearch access policy to add the Logstash role as a principal — no domain redeployment (seconds, not minutes). Skip this if it's already `true` from a prior deploy.
+Back in [o11y-platform](https://github.com/NASA-PDS/o11y-platform): set `o11y_cloudfront_batch_enabled = true` in the `opensearch` tfvars and re-run `task opensearch:deploy`. This only updates the OpenSearch access policy to add the Logstash role as a principal — no domain redeployment (seconds, not minutes). Skip this if it's already `true` from a prior deploy.
 
 ---
 
@@ -397,7 +397,7 @@ task iam:destroy        VENUE=dev   # IAM policy + role attachment     🔐 admi
 task s3:destroy         VENUE=dev   # S3 bucket (does not delete objects)
 ```
 
-OpenSearch teardown is managed in [pdc-observability-platform](https://github.com/NASA-PDS/pdc-observability-platform).
+OpenSearch teardown is managed in [o11y-platform](https://github.com/NASA-PDS/o11y-platform).
 
 ---
 
@@ -407,8 +407,8 @@ OpenSearch teardown is managed in [pdc-observability-platform](https://github.co
   - `o11y-cloudfront-batch/s3.tfstate` — S3 log bucket
   - `o11y-cloudfront-batch/iam-policies.tfstate` — IAM policies
   - `o11y-cloudfront-batch/logstash.tfstate` — Logstash EC2
-  - `observability/opensearch.tfstate` — OpenSearch domain (managed in pdc-observability-platform, own bucket/key)
+  - `o11y-platform/opensearch.tfstate` — OpenSearch domain (managed in o11y-platform, own bucket/key)
 - **Variable naming** — `s3_bucket_prefix` is for the S3 bucket name only (may include CI/CD identifiers like `gh01dc`). `resource_prefix` is for all other resources and should not include CI/CD identifiers.
 - **VPC/SG values** are in tfvars. TODO: source from SSM under `/pds/cds-infra/vpc/` once published.
 - **Logstash sincedb** persists to `/var/lib/logstash/plugins/inputs/s3/` on the EC2 EBS volume (`delete_on_termination = false`) — S3 read position survives restarts and redeployments.
-- **OpenSearch** is managed in [pdc-observability-platform](https://github.com/NASA-PDS/pdc-observability-platform). The endpoint is published to SSM at `/pds/o11y-platform/opensearch/opensearch_endpoint` and consumed automatically at plan time.
+- **OpenSearch** is managed in [o11y-platform](https://github.com/NASA-PDS/o11y-platform). The endpoint is published to SSM at `/pds/o11y-platform/opensearch/opensearch_endpoint` and consumed automatically at plan time.

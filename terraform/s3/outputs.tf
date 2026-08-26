@@ -7,7 +7,7 @@ resource "aws_ssm_parameter" "s3_bucket_name" {
 
 output "s3_bucket_name" {
   value       = module.s3_bucket.bucket_name
-  description = "Name of the S3 bucket created for web analytics logs."
+  description = "Name of the S3 bucket created for o11y-cloudfront-batch logs."
 }
 
 output "s3_bucket_arn" {
