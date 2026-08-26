@@ -1,5 +1,5 @@
 # IAM-module prod values — copy to prod.tfvars and fill in values.
-# Shared values (aws_region, partition, resource_prefix, ec2_role_name, etc.) are in common-prod.tfvars.
+# Shared values (aws_region, partition, ec2_role_name, etc.) are in common-prod.tfvars.
 
 venue     = "prod"
 managedby = "<your-email>"

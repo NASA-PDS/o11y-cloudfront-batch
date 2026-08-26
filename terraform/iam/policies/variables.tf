@@ -15,11 +15,6 @@ variable "logs_s3_bucket_name" {
   description = "Full name of the S3 logs bucket (e.g. pds-logs-dev)"
 }
 
-variable "resource_prefix" {
-  type        = string
-  description = "Prefix for IAM policy names and all non-S3 resources (e.g. pds-dev). No CI/CD identifiers."
-}
-
 variable "ec2_role_name" {
   type        = string
   description = "Name of the existing EC2 IAM role to attach the policy to"
