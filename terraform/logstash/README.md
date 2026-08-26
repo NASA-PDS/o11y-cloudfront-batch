@@ -53,7 +53,7 @@ upgrade.
 | Parameter | Published by |
 |---|---|
 | `/pds/o11y-cloudfront-batch/s3/bucket_name` | `s3` module |
-| `/pds/observability/opensearch/opensearch_endpoint` | `pdc-observability-platform` repo |
+| `/pds/o11y-platform/opensearch/opensearch_endpoint` | `pdc-observability-platform` repo |
 
 ## Inputs
 
@@ -170,7 +170,7 @@ cd /opt/o11y-cloudfront-batch
 
 AWS_REGION=us-west-2 \
 S3_BUCKET_NAME=$(aws ssm get-parameter --name /pds/o11y-cloudfront-batch/s3/bucket_name --query Parameter.Value --output text) \
-OPENSEARCH_ENDPOINT=$(aws ssm get-parameter --name /pds/observability/opensearch/opensearch_endpoint --query Parameter.Value --output text) \
+OPENSEARCH_ENDPOINT=$(aws ssm get-parameter --name /pds/o11y-platform/opensearch/opensearch_endpoint --query Parameter.Value --output text) \
 INDEX_PREFIX=pds-weblogs \
 S3_CF_BUCKET_NAME=<cf-logs-bucket-name-or-explicit-empty-string> \
 EGRESS_REPORT_RECIPIENTS=<comma-separated-report-recipients> \

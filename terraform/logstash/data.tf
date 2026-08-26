@@ -7,7 +7,7 @@ data "aws_ssm_parameter" "s3_bucket_name" {
 }
 
 data "aws_ssm_parameter" "opensearch_endpoint" {
-  name = "/pds/observability/opensearch/opensearch_endpoint"
+  name = "/pds/o11y-platform/opensearch/opensearch_endpoint"
 }
 
 # Only looked up when this module creates the EC2 itself — see
