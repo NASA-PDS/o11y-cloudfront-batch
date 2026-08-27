@@ -8,11 +8,17 @@ Creates the S3 log bucket for o11y-cloudfront-batch and publishes its name to SS
 - `aws_s3_bucket_lifecycle_configuration.lifecycle` — aborts incomplete multipart uploads after 7 days; transitions all objects to Intelligent-Tiering immediately
 - `aws_ssm_parameter.s3_bucket_name` — publishes the bucket name to `/pds/o11y-cloudfront-batch/s3/bucket_name` for consumption by the logstash module
 
+The bucket name suffix (`-web-analytics`, not `-web-analytics-batch` or `-o11y-cloudfront-batch`)
+is a legacy holdover from an early design that deployed this bucket via GitHub CD/OIDC. That
+approach was dropped, but the live buckets (`pds-dev-gh01dc-web-analytics`,
+`pds-prod-gh01dc-web-analytics`) were never renamed — S3 bucket renames require delete/recreate
+plus data migration — so `local.s3_bucket_name` stays fixed regardless of future component renames.
+
 ## Inputs
 
 | Name | Type | Default | Description |
 |---|---|---|---|
-| `s3_bucket_prefix` | `string` | — | Prefix for the S3 bucket name (e.g. `pds-dev-gh01dc`). Bucket is named `<prefix>-web-analytics-batch`. |
+| `s3_bucket_prefix` | `string` | — | Prefix for the S3 bucket name (e.g. `pds-dev-gh01dc`). Bucket is named `<prefix>-web-analytics`. |
 | `ec2_role_name` | `string` | — | Existing EC2 IAM role name — granted `s3:*` on the bucket. |
 | `aws_region` | `string` | `us-west-2` | AWS region. |
 | `partition` | `string` | `aws` | AWS partition. |

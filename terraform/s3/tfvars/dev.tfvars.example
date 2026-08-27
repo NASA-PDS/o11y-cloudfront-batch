@@ -4,4 +4,6 @@
 venue     = "dev"
 managedby = "<your-email>"
 
-s3_bucket_prefix = ""  # S3 bucket name — may include CI/CD identifiers (e.g. pds-dev-gh01dc)
+s3_bucket_prefix = ""  # e.g. pds-dev-gh01dc — the "gh01dc" is a legacy artifact of an early
+                        # GitHub CD/OIDC deploy design (since dropped); the live bucket keeps
+                        # this prefix since it was never renamed. See terraform/s3/README.md.
