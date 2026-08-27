@@ -86,7 +86,7 @@ sphinx-build -b html docs/source docs/build/html
 
 ## Architecture
 
-### S3 Sync Module (`src/pds/web_analytics/s3_sync.py`)
+### S3 Sync Module (`src/pds/o11y_batch/s3_sync.py`)
 
 The `S3Sync` class handles uploading log files from local directories to S3:
 
@@ -134,9 +134,9 @@ The Logstash configuration uses a **modular template system**:
 
 This is a Python namespace package under the `pds` namespace:
 - Package name: `pds-o11y-cloudfront-batch`
-- Namespace: `pds.web_analytics`
-- Source location: `src/pds/web_analytics/`
-- Version: Read from `src/pds/web_analytics/VERSION.txt`
+- Namespace: `pds.o11y_batch`
+- Source location: `src/pds/o11y_batch/`
+- Version: Read from `src/pds/o11y_batch/VERSION.txt`
 
 ## Important Implementation Details
 
@@ -255,7 +255,7 @@ scripts/logstash-deploy.sh` to redeploy config. Full runbooks:
 
 ## Notes for Development
 
-- The `scripts/s3_log_sync.py` is a legacy script; the actual implementation is in `src/pds/web_analytics/s3_sync.py`
+- The `scripts/s3_log_sync.py` is a legacy script; the actual implementation is in `src/pds/o11y_batch/s3_sync.py`
 - Always run `./scripts/logstash_build_config.sh` after modifying Logstash configs to regenerate pipeline files
 - The system uses `envsubst` for variable substitution in both Python config loading and Logstash config generation
 - AWS profile is required for S3 operations - fails with helpful error if not provided

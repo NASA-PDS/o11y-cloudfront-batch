@@ -99,8 +99,8 @@ sudo dnf install gettext
 git clone https://github.com/NASA-PDS/o11y-cloudfront-batch.git
 cd o11y-cloudfront-batch
 
-# Create WEB_ANALYTICS_HOME environment variable
-echo 'export WEB_ANALYTICS_HOME="$(pwd)"' >> ~/.bashrc
+# Create O11Y_BATCH_HOME environment variable
+echo 'export O11Y_BATCH_HOME="$(pwd)"' >> ~/.bashrc
 source ~/.bashrc
 ```
 
@@ -165,7 +165,7 @@ GET _cat/templates
 The PDS Web Analytics system is organized as a Python package:
 
 ```
-src/pds/web_analytics/
+src/pds/o11y_batch/
 ├── __init__.py          # Package initialization
 ├── s3_sync.py          # S3Sync class implementation (now uses boto3)
 └── VERSION.txt         # Package version
@@ -176,7 +176,7 @@ src/pds/web_analytics/
 After setting up the environment, install the package in development mode:
 
 ```bash
-cd $WEB_ANALYTICS_HOME
+cd $O11Y_BATCH_HOME
 
 # Install in development mode
 pip install -e .
@@ -238,7 +238,7 @@ The configuration supports environment variable substitution using `${VARIABLE_N
 Sync logs from PDS reporting servers to S3:
 
 ```bash
-cd $WEB_ANALYTICS_HOME
+cd $O11Y_BATCH_HOME
 
 # Using the package command (recommended)
 s3-log-sync -c config/config.yaml -d /var/log/pds

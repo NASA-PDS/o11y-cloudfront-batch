@@ -215,7 +215,7 @@ REPO_BRANCH=<your-branch> S3_CF_BUCKET_NAME=<cf-logs-bucket-name> bash scripts/l
 > it's rare (install/upgrade only).
 
 The deploy script will:
-1. Clone/update the web-analytics repo to `/opt/o11y-cloudfront-batch` (owned by `logstash`)
+1. Clone/update the o11y-cloudfront-batch repo to `/opt/o11y-cloudfront-batch` (owned by `logstash`)
 2. Copy Logstash pipeline config to `/etc/logstash`
 3. Build `pipelines.yml` and `pipelines/*.conf` from templates
 4. Apply the OpenSearch ECS index template to the new domain
@@ -331,7 +331,8 @@ Required only if ingesting CloudFront logs. Apply in the `pdc-cds-infra` repo:
 
 ```bash
 cd pdc-cds-infra/terraform/cloudfront/pds-main/
-# Fill in tfvars/dev.tfvars: web_analytics_ec2_role_name, firehose_pds_main_cf_role_name
+# Fill in tfvars/dev.tfvars: enable_o11y_batch = true (reads the EC2 role ARN from SSM at
+# /pds/o11y-cloudfront-batch/iam/ec2_role_arn automatically)
 task plan   VENUE=dev
 task deploy VENUE=dev
 ```

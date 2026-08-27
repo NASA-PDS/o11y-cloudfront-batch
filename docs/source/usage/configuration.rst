@@ -14,7 +14,7 @@ Create a ``.env`` file in the repository root:
     export AWS_REGION=us-west-2
     export S3_BUCKET_NAME=your-pds-logs-bucket
     export OPENSEARCH_URL=https://your-opensearch-domain.us-west-2.es.amazonaws.com
-    export INDEX_PREFIX=pds-web-analytics
+    export INDEX_PREFIX=pds-o11y-cloudfront-batch
 
     # Logstash Configuration
     export LS_SETTINGS_DIR=$(pwd)/config/logstash/config
@@ -55,7 +55,7 @@ Building Configuration
 
 .. code-block:: bash
 
-    cd $WEB_ANALYTICS_HOME
+    cd $O11Y_BATCH_HOME
 
     # Source your config
     source .env
@@ -102,7 +102,7 @@ OpenSearch Setup
 
        PUT _index_template/ecs-web-template
 
-       # copy-paste from https://github.com/NASA-PDS/web-analytics/tree/main/config/opensearch/ecs-8.17-custom-template.json
+       # copy-paste from https://github.com/NASA-PDS/o11y-cloudfront-batch/tree/main/config/opensearch/ecs-8.17-custom-template.json
 
 4. Verify success:
 
