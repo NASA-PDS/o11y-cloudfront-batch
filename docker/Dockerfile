@@ -17,7 +17,7 @@
 # -----------------------------------------------------------------------------
 # base — Logstash + required plugins + PDS configuration
 # -----------------------------------------------------------------------------
-FROM docker.elastic.co/logstash/logstash:8.17.0 AS base
+FROM docker.elastic.co/logstash/logstash:9.5.2 AS base
 
 USER root
 
