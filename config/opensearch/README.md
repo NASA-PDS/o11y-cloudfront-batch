@@ -17,7 +17,7 @@ Then there were some customizations needed for it to work with OpenSearch.
 Was:
 ```
 {
-  "index_patterns": ["o11y-cloudfront-batch-*"],
+  "index_patterns": ["pds-weblogs-*"],
   "mappings": { ... },
   "order":1,
   ...
@@ -27,7 +27,7 @@ Was:
 Is:
 ```
 {
-  "index_patterns": ["o11y-cloudfront-batch-*"],
+  "index_patterns": ["pds-weblogs-*"],
   "priority": 500,
   "mappings": { ... },
   ...
@@ -39,7 +39,7 @@ Is:
 Was:
 ```
 {
-  "index_patterns": ["o11y-cloudfront-batch-*"],
+  "index_patterns": ["pds-weblogs-*"],
   "priority": 500,
   "mappings": { ... },
   "settings": { ... },
@@ -50,7 +50,7 @@ Was:
 Is:
 ```
 {
-  "index_patterns": ["o11y-cloudfront-batch-*"],
+  "index_patterns": ["pds-weblogs-*"],
   "priority": 500,
   "template": {
     "mappings": { ... },

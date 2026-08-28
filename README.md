@@ -128,7 +128,7 @@ cp .env.example .env
 S3_BUCKET_NAME=your-pds-logs-bucket
 S3_CF_BUCKET_NAME=               # CloudFront logs bucket (EN only); leave empty to skip
 OPENSEARCH_URL=https://your-opensearch-domain.us-west-2.es.amazonaws.com
-INDEX_PREFIX=pds-o11y-cloudfront-batch
+INDEX_PREFIX=pds-weblogs
 AWS_REGION=us-west-2
 ```
 
