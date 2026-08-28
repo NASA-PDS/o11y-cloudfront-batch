@@ -72,7 +72,7 @@ ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 # Logstash installation — including its bundled JDK — is copied from base.
 # The bundled JDK is self-contained and compatible with Bookworm's glibc.
 # -----------------------------------------------------------------------------
-FROM python:3.13-slim AS test
+FROM python:3.14-slim AS test
 
 # envsubst (gettext-base) is required by logstash_build_config.sh
 RUN apt-get update --quiet && \
