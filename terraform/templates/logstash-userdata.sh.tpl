@@ -2,11 +2,16 @@
 set -euo pipefail
 
 # Install and start SSM agent first so the instance registers with Systems Manager
-# regardless of whether the Logstash bootstrap succeeds. RHEL does not ship with
-# SSM agent pre-installed; this must run before any step that could exit early.
-dnf install -y amazon-ssm-agent --quiet || true
-systemctl enable amazon-ssm-agent --quiet
-systemctl start amazon-ssm-agent
+# regardless of whether the Logstash bootstrap succeeds. RHEL does not include
+# amazon-ssm-agent in its default repos — install directly from the AWS RPM.
+# Wrapped in if/then so a failure here doesn't abort the rest of the script.
+SSM_RPM="https://s3.${aws_region}.amazonaws.com/amazon-ssm-agent-${aws_region}/latest/linux_amd64/amazon-ssm-agent.rpm"
+if dnf install -y "$SSM_RPM" --quiet 2>/dev/null; then
+  systemctl enable amazon-ssm-agent
+  systemctl start amazon-ssm-agent
+else
+  echo "WARNING: SSM agent install failed — instance will not be reachable via SSM" >&2
+fi
 
 # Minimal root bootstrap just to get the repo onto disk — the real
 # bootstrap/deploy logic lives in scripts/ within the repo itself so it can
