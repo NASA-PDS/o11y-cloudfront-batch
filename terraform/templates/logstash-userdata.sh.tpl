@@ -1,6 +1,13 @@
 #!/bin/bash
 set -euo pipefail
 
+# Install and start SSM agent first so the instance registers with Systems Manager
+# regardless of whether the Logstash bootstrap succeeds. RHEL does not ship with
+# SSM agent pre-installed; this must run before any step that could exit early.
+dnf install -y amazon-ssm-agent --quiet || true
+systemctl enable amazon-ssm-agent --quiet
+systemctl start amazon-ssm-agent
+
 # Minimal root bootstrap just to get the repo onto disk — the real
 # bootstrap/deploy logic lives in scripts/ within the repo itself so it can
 # be re-run later without going back through userdata.
