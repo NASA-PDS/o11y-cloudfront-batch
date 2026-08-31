@@ -37,7 +37,7 @@ resource "aws_launch_template" "logstash" {
   count = var.manage_ec2_instance ? 1 : 0
 
   name_prefix   = "${local.ec2_name}-"
-  image_id      = data.aws_ami.mcp_amazon_linux[0].id
+  image_id      = var.ami_id
   instance_type = var.logstash_instance_type
 
   network_interfaces {

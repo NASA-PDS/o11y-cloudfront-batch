@@ -88,8 +88,8 @@ variable "s3_cf_bucket_name" {
   default     = ""
 }
 
-variable "mcp_ami_owner_id" {
-  description = "AWS account ID that owns the Amazon Linux 2023 AMIs used for the Logstash instance. Required when manage_ec2_instance = true."
+variable "ami_id" {
+  description = "AMI ID for the Logstash EC2 instance. Required when manage_ec2_instance = true."
   type        = string
   default     = ""
 }
