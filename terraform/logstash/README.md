@@ -146,25 +146,12 @@ curl -fsSL https://raw.githubusercontent.com/NASA-PDS/o11y-cloudfront-batch/main
 
 # 3. Switch to the logstash user — no sudo from here on.
 sudo runuser -l logstash
-# You're now in a real login shell as logstash.
-export XDG_RUNTIME_DIR="/run/user/$(id -u)"
 
-# 4. Operator: deploy config and start the service. Pipe deploy.sh directly
-#    from GitHub — it clones the repo itself (no root needed).
-#
-#    REPO_DIR controls where the repo is checked out. Default: /opt/o11y-cloudfront-batch
-#    Override to /usr/local/applications/o11y-cloudfront-batch if required by local policy.
-#
-#    ALWAYS pass S3_CF_BUCKET_NAME on a first-time deploy, even if this venue
-#    doesn't use EN's CloudFront pipeline (set it to "" explicitly). Leaving it
-#    unset breaks the EN CloudFront input at runtime with a confusing
-#    s3:ListAllMyBuckets AccessDenied error. Redeploys preserve the last value,
-#    so this only matters on the very first run.
-REPO_DIR=/opt/o11y-cloudfront-batch \
-REPO_BRANCH=main \
-AWS_REGION=us-west-2 \
-S3_CF_BUCKET_NAME=<cf-logs-bucket-name-or-explicit-empty-string> \
-EGRESS_REPORT_RECIPIENTS=<comma-separated-report-recipients> \
+# 4. Operator: deploy config and start the service.
+#    REPO_DIR defaults to /opt/o11y-cloudfront-batch — override if local policy
+#    requires a different location (e.g. /usr/local/applications/o11y-cloudfront-batch).
+#    ALWAYS set S3_CF_BUCKET_NAME on a first-time deploy (use "" if EN CloudFront
+#    isn't used here) — an unset value silently breaks the EN pipeline at runtime.
 bash <(curl -fsSL https://raw.githubusercontent.com/NASA-PDS/o11y-cloudfront-batch/main/scripts/logstash-deploy.sh)
 
 # 5. Verify

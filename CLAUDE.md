@@ -249,10 +249,6 @@ curl -fsSL https://raw.githubusercontent.com/NASA-PDS/o11y-cloudfront-batch/main
 
 ```bash
 sudo runuser -l logstash
-export XDG_RUNTIME_DIR="/run/user/$(id -u)"
-REPO_DIR=/opt/o11y-cloudfront-batch \
-REPO_BRANCH=main \
-S3_CF_BUCKET_NAME=<bucket-or-empty> \
 bash <(curl -fsSL https://raw.githubusercontent.com/NASA-PDS/o11y-cloudfront-batch/main/scripts/logstash-deploy.sh)
 ```
 

@@ -6,7 +6,6 @@
 # the systemd --user logstash service.
 #
 # Can be piped directly from GitHub (no prior repo checkout needed):
-#   REPO_DIR=/opt/o11y-cloudfront-batch REPO_BRANCH=main \
 #   bash <(curl -fsSL https://raw.githubusercontent.com/NASA-PDS/o11y-cloudfront-batch/main/scripts/logstash-deploy.sh)
 #
 # Or run from an existing checkout:
