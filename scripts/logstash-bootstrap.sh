@@ -42,7 +42,7 @@ if [ ! -f /usr/share/logstash/bin/logstash ]; then
   if ! dnf info python3.13 &>/dev/null; then
     PYTHON_PKGS="python3 python3-pip"
   fi
-  dnf install -y git $PYTHON_PKGS gettext --quiet
+  dnf install -y git $PYTHON_PKGS gettext awscli2 --quiet
   python3 -m pip install --quiet --break-system-packages boto3 requests
 
   rpm --import https://artifacts.elastic.co/GPG-KEY-elasticsearch
