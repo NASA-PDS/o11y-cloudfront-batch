@@ -231,6 +231,32 @@ needs adm/wheel group membership `logstash` doesn't have), `bash
 scripts/logstash-deploy.sh` to redeploy config. Full runbooks:
 `terraform/logstash/README.md` and the root `README.md` Quick Reference.
 
+### First-Boot Setup (new EC2)
+
+Userdata only installs the SSM agent — everything else is done manually
+after connecting. Two-phase process:
+
+**Phase 1 — SA (root required):** Install Logstash + provision the `logstash` account.
+The bootstrap script is repo-independent and can be piped directly from GitHub:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/NASA-PDS/o11y-cloudfront-batch/main/scripts/logstash-bootstrap.sh \
+  | sudo LOGSTASH_VERSION=8.18.0 bash
+```
+
+**Phase 2 — Operator (no sudo):** Clone the repo, deploy config, start the service.
+
+```bash
+sudo runuser -l logstash
+bash <(curl -fsSL https://raw.githubusercontent.com/NASA-PDS/o11y-cloudfront-batch/main/scripts/logstash-deploy.sh)
+```
+
+Or if you prefer to clone first:
+```bash
+git clone https://github.com/NASA-PDS/o11y-cloudfront-batch.git /opt/o11y-cloudfront-batch
+bash /opt/o11y-cloudfront-batch/scripts/logstash-deploy.sh
+```
+
 ## Dependencies
 
 ### Python Dependencies (setup.cfg)

@@ -1,18 +1,24 @@
 #!/bin/bash
-# logstash-bootstrap.sh — Root-only, rare: install packages, Logstash, and
-# provision the `logstash` account for no-sudo day-2 operations.
+# logstash-bootstrap.sh — SA-only (requires root): install system packages,
+# Logstash RPM + plugins, and provision the `logstash` OS account for
+# no-sudo day-2 operations.
 #
-# Run this once at first boot (via userdata) and again only for deliberate
-# admin actions like a Logstash version upgrade. Everything else — config
-# updates, service restarts, log tailing — is done afterward by the
-# `logstash` user with scripts/logstash-deploy.sh, no sudo required.
+# Run manually once after first boot via SSM, and again only for deliberate
+# SA actions such as a Logstash version upgrade. Does NOT require the
+# o11y-cloudfront-batch repo to be checked out — download and run directly:
 #
-# Usage (root, e.g. via SSM):
+#   curl -fsSL https://raw.githubusercontent.com/NASA-PDS/o11y-cloudfront-batch/main/scripts/logstash-bootstrap.sh \
+#     | sudo bash
+#
+# Or if the repo is already on disk:
 #   sudo bash /opt/o11y-cloudfront-batch/scripts/logstash-bootstrap.sh
+#
+# After bootstrap completes, an operator (no sudo) runs logstash-deploy.sh
+# to clone the repo, deploy config, and start the service.
 #
 # Env overrides:
 #   LOGSTASH_VERSION — Logstash version to install if missing (default: 8.18.0)
-#   REPO_DIR         — path to the cloned o11y-cloudfront-batch repo (default: /opt/o11y-cloudfront-batch)
+#   REPO_DIR         — path to hand off repo ownership if already on disk (default: /opt/o11y-cloudfront-batch)
 
 set -euo pipefail
 

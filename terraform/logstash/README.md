@@ -14,7 +14,7 @@ below.
 
 ## Resources
 
-- `aws_launch_template.logstash`, `aws_instance.logstash` — EC2 launch template + instance, only created when `manage_ec2_instance = true`; userdata installs Logstash via RPM (root, `logstash-bootstrap.sh`) then deploys config and starts Logstash as a `systemd --user` service under the `logstash` account (`logstash-deploy.sh`). No SSH; access via SSM Session Manager.
+- `aws_launch_template.logstash`, `aws_instance.logstash` — EC2 launch template + instance, only created when `manage_ec2_instance = true`; userdata only installs the SSM agent — Logstash install and service setup are done manually post-boot (see [First-boot setup](#first-boot-setup)). No SSH; access via SSM Session Manager.
 - `aws_ssm_document.logstash_runas` — custom SSM Session document (Run-As `logstash`) so operators never need sudo for day-2 ops; always created, works against any instance (created here or existing)
 - `aws_ssm_parameter.ec2_role_arn` — publishes EC2 role ARN to `/pds/o11y-cloudfront-batch/iam/ec2_role_arn`
 - `aws_ssm_parameter.logstash_instance_id` — publishes the instance ID (created, or `existing_instance_id`) to `/pds/o11y-cloudfront-batch/ec2/logstash_instance_id`
@@ -38,9 +38,8 @@ sudo runuser -l logstash    # or: su - logstash
 From there, execution, logging, monitoring, and git-based config updates
 are all done as that account with **no sudo**. The only step that still
 requires root is `scripts/logstash-bootstrap.sh` (package/RPM install and
-initial account provisioning), run automatically at first boot and
-otherwise only for deliberate admin actions like a Logstash version
-upgrade.
+initial account provisioning) — run once manually after first boot, and
+again only for deliberate admin actions like a Logstash version upgrade.
 
 > Granting operators `ssm:StartSession` on the `logstash_runas` document's
 > ARN (in addition to the instance ARN) is an IAM/SSO concern owned outside
@@ -129,24 +128,21 @@ nothing here depends on it.
   module reads for `ec2_role_arn`) — plus SSM connectivity
   (`AmazonSSMManagedInstanceCore`) if SSM access will be used at all
 
-### One-time manual install
+### First-boot setup
 
-This replicates exactly what `terraform/templates/logstash-userdata.sh.tpl`
-automates for a newly created instance — run it once, by hand, as root,
-however you reach the box:
+This applies to both newly Terraform-created instances and existing EC2s
+(`manage_ec2_instance = false`). Userdata only installs the SSM agent —
+run these steps manually after connecting.
 
 ```bash
-# 1. Connect as root (or a sudo-capable user)
+# 1. Connect as root via SSM
+aws ssm start-session --target <instance-id>
 
-# 2. Install git and clone the repo — logstash-bootstrap.sh needs it on disk first
-sudo dnf install -y git --quiet
-sudo git clone --branch main https://github.com/NASA-PDS/o11y-cloudfront-batch.git /opt/o11y-cloudfront-batch
-
-# 3. Root, one-time: installs Logstash + plugins, and provisions the
-#    logstash account (home dir, login shell, linger, nofile limits,
-#    systemd --user unit) — see scripts/logstash-bootstrap.sh
-sudo LOGSTASH_VERSION=8.18.0 REPO_DIR=/opt/o11y-cloudfront-batch \
-  bash /opt/o11y-cloudfront-batch/scripts/logstash-bootstrap.sh
+# 2. Root, one-time: install Logstash + plugins, provision the logstash
+#    account (home dir, login shell, linger, nofile limits, systemd --user
+#    unit). The bootstrap script is repo-independent — pipe it directly:
+curl -fsSL https://raw.githubusercontent.com/NASA-PDS/o11y-cloudfront-batch/main/scripts/logstash-bootstrap.sh \
+  | sudo LOGSTASH_VERSION=8.18.0 bash
 
 # 4. As the logstash user, no sudo: deploy config and start the service —
 #    see scripts/logstash-deploy.sh

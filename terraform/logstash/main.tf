@@ -61,13 +61,7 @@ resource "aws_launch_template" "logstash" {
   }
 
   user_data = base64encode(templatefile("${path.module}/../templates/logstash-userdata.sh.tpl", {
-    logstash_version    = var.logstash_version
-    repo_branch         = var.repo_branch
-    aws_region          = var.aws_region
-    s3_bucket_name      = data.aws_ssm_parameter.s3_bucket_name.value
-    opensearch_endpoint = data.aws_ssm_parameter.opensearch_endpoint.value
-    index_prefix        = var.resource_prefix
-    s3_cf_bucket_name   = var.s3_cf_bucket_name
+    aws_region = var.aws_region
   }))
 
   tag_specifications {
