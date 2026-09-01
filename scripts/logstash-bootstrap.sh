@@ -31,8 +31,13 @@ echo "=== o11y-cloudfront-batch Logstash bootstrap ==="
 # ----------------------------------------
 if [ ! -f /usr/share/logstash/bin/logstash ]; then
   echo "--- Installing Logstash ${LOGSTASH_VERSION} ---"
-  dnf install -y git python3.13 python3.13-pip gettext --quiet
-  python3.13 -m pip install --quiet --break-system-packages boto3 requests
+  # Use python3.13 if available (RHEL 10+), fall back to python3 (RHEL 8/9)
+  PYTHON_PKGS="python3.13 python3.13-pip"
+  if ! dnf info python3.13 &>/dev/null; then
+    PYTHON_PKGS="python3 python3-pip"
+  fi
+  dnf install -y git $PYTHON_PKGS gettext --quiet
+  python3 -m pip install --quiet --break-system-packages boto3 requests
 
   rpm --import https://artifacts.elastic.co/GPG-KEY-elasticsearch
   cat > /etc/yum.repos.d/elastic.repo <<'REPO'
