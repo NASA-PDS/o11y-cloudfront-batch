@@ -249,6 +249,9 @@ curl -fsSL https://raw.githubusercontent.com/NASA-PDS/o11y-cloudfront-batch/main
 
 ```bash
 sudo runuser -l logstash
+export REPO_DIR=/opt/o11y-cloudfront-batch
+export REPO_BRANCH=main
+export S3_CF_BUCKET_NAME=<cf-logs-bucket-or-empty-string>
 bash <(curl -fsSL https://raw.githubusercontent.com/NASA-PDS/o11y-cloudfront-batch/main/scripts/logstash-deploy.sh)
 ```
 

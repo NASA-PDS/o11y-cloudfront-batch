@@ -152,6 +152,10 @@ sudo runuser -l logstash
 #    requires a different location (e.g. /usr/local/applications/o11y-cloudfront-batch).
 #    ALWAYS set S3_CF_BUCKET_NAME on a first-time deploy (use "" if EN CloudFront
 #    isn't used here) — an unset value silently breaks the EN pipeline at runtime.
+export REPO_DIR=/opt/o11y-cloudfront-batch
+export REPO_BRANCH=main
+export S3_CF_BUCKET_NAME=<cf-logs-bucket-or-empty-string>
+export EGRESS_REPORT_RECIPIENTS=<comma-separated-recipients>
 bash <(curl -fsSL https://raw.githubusercontent.com/NASA-PDS/o11y-cloudfront-batch/main/scripts/logstash-deploy.sh)
 
 # 5. Verify
