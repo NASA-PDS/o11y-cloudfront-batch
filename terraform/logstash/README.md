@@ -138,41 +138,36 @@ run these steps manually after connecting.
 # 1. Connect as root via SSM
 aws ssm start-session --target <instance-id>
 
-# 2. Root, one-time: install Logstash + plugins, provision the logstash
+# 2. SA only (root): install Logstash + plugins, provision the logstash
 #    account (home dir, login shell, linger, nofile limits, systemd --user
 #    unit). The bootstrap script is repo-independent — pipe it directly:
 curl -fsSL https://raw.githubusercontent.com/NASA-PDS/o11y-cloudfront-batch/main/scripts/logstash-bootstrap.sh \
   | sudo LOGSTASH_VERSION=8.18.0 bash
 
-# 4. As the logstash user, no sudo: deploy config and start the service —
-#    see scripts/logstash-deploy.sh
-#
-#    ALWAYS pass S3_CF_BUCKET_NAME on a first-time manual install, even if
-#    this venue doesn't use EN's CloudFront pipeline (in which case set it to
-#    an explicit "" so that's a deliberate choice, not an accidental omission).
-#    Leaving it unset here defaults to empty, which is NOT the same as this
-#    module's own s3_cf_bucket_name tfvar and will NOT be picked up
-#    automatically -- an empty value silently breaks the EN CloudFront input
-#    at Logstash runtime with a confusing s3:ListAllMyBuckets AccessDenied
-#    error instead of a clear "not configured" message. See root README.md
-#    Troubleshooting > Common Issues for that failure mode. (Redeploys after
-#    this first one preserve whatever was last configured if you omit the
-#    var, so this only bites on the very first manual deploy.)
+# 3. Switch to the logstash user — no sudo from here on.
 sudo runuser -l logstash
-# You're now in a real login shell as logstash — everything below is a plain
-# command, no more sudo/runuser wrapping needed for the rest of this session.
+# You're now in a real login shell as logstash.
 export XDG_RUNTIME_DIR="/run/user/$(id -u)"
-cd /opt/o11y-cloudfront-batch
 
+# 4. Operator: deploy config and start the service. Pipe deploy.sh directly
+#    from GitHub — it clones the repo itself (no root needed).
+#
+#    REPO_DIR controls where the repo is checked out. Default: /opt/o11y-cloudfront-batch
+#    Override to /usr/local/applications/o11y-cloudfront-batch if required by local policy.
+#
+#    ALWAYS pass S3_CF_BUCKET_NAME on a first-time deploy, even if this venue
+#    doesn't use EN's CloudFront pipeline (set it to "" explicitly). Leaving it
+#    unset breaks the EN CloudFront input at runtime with a confusing
+#    s3:ListAllMyBuckets AccessDenied error. Redeploys preserve the last value,
+#    so this only matters on the very first run.
+REPO_DIR=/opt/o11y-cloudfront-batch \
+REPO_BRANCH=main \
 AWS_REGION=us-west-2 \
-S3_BUCKET_NAME=$(aws ssm get-parameter --name /pds/o11y-cloudfront-batch/s3/bucket_name --query Parameter.Value --output text) \
-OPENSEARCH_ENDPOINT=$(aws ssm get-parameter --name /pds/o11y-platform/opensearch/opensearch_endpoint --query Parameter.Value --output text) \
-INDEX_PREFIX=pds-weblogs \
 S3_CF_BUCKET_NAME=<cf-logs-bucket-name-or-explicit-empty-string> \
 EGRESS_REPORT_RECIPIENTS=<comma-separated-report-recipients> \
-bash scripts/logstash-deploy.sh
+bash <(curl -fsSL https://raw.githubusercontent.com/NASA-PDS/o11y-cloudfront-batch/main/scripts/logstash-deploy.sh)
 
-# 5. Verify (still inside the same logstash login shell)
+# 5. Verify
 systemctl --user status logstash
 ```
 

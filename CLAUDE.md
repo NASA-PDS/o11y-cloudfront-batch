@@ -245,16 +245,15 @@ curl -fsSL https://raw.githubusercontent.com/NASA-PDS/o11y-cloudfront-batch/main
 ```
 
 **Phase 2 — Operator (no sudo):** Clone the repo, deploy config, start the service.
+`REPO_DIR` defaults to `/opt/o11y-cloudfront-batch`; override to `/usr/local/applications/o11y-cloudfront-batch` if required by local policy.
 
 ```bash
 sudo runuser -l logstash
+export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+REPO_DIR=/opt/o11y-cloudfront-batch \
+REPO_BRANCH=main \
+S3_CF_BUCKET_NAME=<bucket-or-empty> \
 bash <(curl -fsSL https://raw.githubusercontent.com/NASA-PDS/o11y-cloudfront-batch/main/scripts/logstash-deploy.sh)
-```
-
-Or if you prefer to clone first:
-```bash
-git clone https://github.com/NASA-PDS/o11y-cloudfront-batch.git /opt/o11y-cloudfront-batch
-bash /opt/o11y-cloudfront-batch/scripts/logstash-deploy.sh
 ```
 
 ## Dependencies

@@ -5,7 +5,11 @@
 # Safe to re-run: pulls latest config, updates the env file, and restarts
 # the systemd --user logstash service.
 #
-# Usage (as the logstash user — e.g. an SSM Run-As session):
+# Can be piped directly from GitHub (no prior repo checkout needed):
+#   REPO_DIR=/opt/o11y-cloudfront-batch REPO_BRANCH=main \
+#   bash <(curl -fsSL https://raw.githubusercontent.com/NASA-PDS/o11y-cloudfront-batch/main/scripts/logstash-deploy.sh)
+#
+# Or run from an existing checkout:
 #   bash /opt/o11y-cloudfront-batch/scripts/logstash-deploy.sh
 #
 # Requires scripts/logstash-bootstrap.sh to have been run first (root, once)
@@ -13,12 +17,14 @@
 # to run otherwise.
 #
 # Optional env overrides (all auto-populated from SSM/metadata if not set):
+#   REPO_DIR                 — where to clone/update the repo (default: /opt/o11y-cloudfront-batch)
+#                              override to /usr/local/applications/o11y-cloudfront-batch if required
+#   REPO_BRANCH              — git branch to deploy (default: main)
 #   OPENSEARCH_ENDPOINT      — OpenSearch domain endpoint (without https://)
 #   S3_BUCKET_NAME           — S3 bucket for log ingestion
 #   AWS_REGION               — AWS region (default: us-west-2)
 #   INDEX_PREFIX             — OpenSearch index prefix (default: pds-weblogs)
 #   S3_CF_BUCKET_NAME        — CloudFront logs bucket (EN only; default: empty)
-#   REPO_BRANCH              — git branch to deploy (default: main)
 #
 # Daily egress report cron job — installed only when EGRESS_REPORT_RECIPIENTS
 # is set (REQUIRED at deploy time to enable the report; everything else has
