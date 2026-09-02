@@ -128,7 +128,7 @@ Deploy from the [o11y-platform](https://github.com/NASA-PDS/o11y-platform) repo 
 
 ```bash
 # Primary (Terragrunt)
-terragrunt apply --terragrunt-working-dir $CDS_INFRA_DEPLOY_DIR/venues/dev/o11y-cloudfront-batch/s3
+terragrunt apply --working-dir $CDS_INFRA_DEPLOY_DIR/venues/dev/o11y-cloudfront-batch/s3
 
 # Fallback (Task)
 task s3:plan   VENUE=dev
@@ -143,7 +143,7 @@ Requires `iam:CreatePolicy` and `iam:AttachRolePolicy`. Must be run by a system 
 
 ```bash
 # Primary (Terragrunt)
-terragrunt apply --terragrunt-working-dir $CDS_INFRA_DEPLOY_DIR/venues/dev/o11y-cloudfront-batch/iam/policies
+terragrunt apply --working-dir $CDS_INFRA_DEPLOY_DIR/venues/dev/o11y-cloudfront-batch/iam/policies
 
 # Fallback (Task)
 task iam:plan   VENUE=dev
@@ -160,7 +160,7 @@ Back in [o11y-platform](https://github.com/NASA-PDS/o11y-platform): set `o11y_cl
 
 ```bash
 # Primary (Terragrunt)
-terragrunt apply --terragrunt-working-dir $CDS_INFRA_DEPLOY_DIR/venues/dev/o11y-platform/opensearch
+terragrunt apply --working-dir $CDS_INFRA_DEPLOY_DIR/venues/dev/o11y-platform/opensearch
 
 # Fallback (Task — from o11y-platform repo)
 task opensearch:deploy VENUE=dev
@@ -174,7 +174,7 @@ Requires `iam:PassRole`. Must be run by a system administrator. Run after Steps 
 
 ```bash
 # Primary (Terragrunt)
-terragrunt apply --terragrunt-working-dir $CDS_INFRA_DEPLOY_DIR/venues/dev/o11y-cloudfront-batch/logstash
+terragrunt apply --working-dir $CDS_INFRA_DEPLOY_DIR/venues/dev/o11y-cloudfront-batch/logstash
 
 # Fallback (Task)
 task logstash:plan   VENUE=dev
@@ -425,9 +425,9 @@ Each component can be upgraded independently once the stack is fully deployed.
 
 ```bash
 # Primary (Terragrunt) — destroy in reverse order
-terragrunt destroy --terragrunt-working-dir $CDS_INFRA_DEPLOY_DIR/venues/dev/o11y-cloudfront-batch/logstash
-terragrunt destroy --terragrunt-working-dir $CDS_INFRA_DEPLOY_DIR/venues/dev/o11y-cloudfront-batch/iam/policies
-terragrunt destroy --terragrunt-working-dir $CDS_INFRA_DEPLOY_DIR/venues/dev/o11y-cloudfront-batch/s3
+terragrunt destroy --working-dir $CDS_INFRA_DEPLOY_DIR/venues/dev/o11y-cloudfront-batch/logstash
+terragrunt destroy --working-dir $CDS_INFRA_DEPLOY_DIR/venues/dev/o11y-cloudfront-batch/iam/policies
+terragrunt destroy --working-dir $CDS_INFRA_DEPLOY_DIR/venues/dev/o11y-cloudfront-batch/s3
 
 # Fallback (Task)
 task logstash:destroy   VENUE=dev   # Logstash EC2 + launch template  🔐 admin
