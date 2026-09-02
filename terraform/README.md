@@ -71,32 +71,29 @@ flowchart TD
 
 ### 1. tfvars
 
-tfvars are tracked in the `cds-infra-deploy` repo (private GitLab, not GitHub) at
-`venues/<venue>/o11y-cloudfront-batch/{common,s3,logstash,iam-policies}.tfvars`, not in this repo —
+tfvars for all venues are tracked in [cds-infra-deploy](https://github.com/NASA-PDS/cds-infra-deploy) (private) at
+`venues/<venue>/o11y-cloudfront-batch/`, not in this repo —
 `tfvars/`, `s3/tfvars/`, `iam/policies/tfvars/`, and `logstash/tfvars/` here are all gitignored.
-Point Task at a local checkout:
+
+**Primary (Terragrunt via cds-infra-deploy):**
 
 ```bash
 export CDS_INFRA_DEPLOY_DIR=/path/to/cds-infra-deploy
-cd terraform/
-task s3:plan VENUE=dev
+eval $(aws configure export-credentials --profile <your-profile> --format env)
+unset AWS_PROFILE
 ```
 
-For personal iteration before promoting values to `cds-infra-deploy`, pass `LOCAL=1` to use
-this repo's own (gitignored) tfvars instead:
+**Fallback (local iteration — `LOCAL=1`):**
+
+For personal iteration before promoting values to cds-infra-deploy, use the repo-local gitignored tfvars:
 
 ```bash
 cd terraform/
-
-# Shared values for root + IAM modules (aws_region, tenant, partition, s3_bucket_prefix, etc.)
 cp tfvars/common.tfvars.example             tfvars/common-dev.tfvars
-# Edit common-dev.tfvars: set managedby, resource_prefix, ec2_role_name
-
-# Module-specific venue values
-cp s3/tfvars/dev.tfvars.example                     s3/tfvars/dev.tfvars
-cp iam/policies/tfvars/dev.tfvars.example           iam/policies/tfvars/dev.tfvars
-cp logstash/tfvars/dev.tfvars.example               logstash/tfvars/dev.tfvars
-
+cp s3/tfvars/dev.tfvars.example             s3/tfvars/dev.tfvars
+cp iam/policies/tfvars/dev.tfvars.example   iam/policies/tfvars/dev.tfvars
+cp logstash/tfvars/dev.tfvars.example       logstash/tfvars/dev.tfvars
+# Edit each file — fill in managedby, vpc_id, ec2_security_group_name, s3_cf_bucket_name
 task s3:plan VENUE=dev LOCAL=1
 ```
 
@@ -130,6 +127,10 @@ Deploy from the [o11y-platform](https://github.com/NASA-PDS/o11y-platform) repo 
 ### Step 1: S3 bucket — 🔑 Power-User
 
 ```bash
+# Primary (Terragrunt)
+terragrunt apply --terragrunt-working-dir $CDS_INFRA_DEPLOY_DIR/venues/dev/o11y-cloudfront-batch/s3
+
+# Fallback (Task)
 task s3:plan   VENUE=dev
 task s3:deploy VENUE=dev
 ```
@@ -141,6 +142,10 @@ task s3:deploy VENUE=dev
 Requires `iam:CreatePolicy` and `iam:AttachRolePolicy`. Must be run by a system administrator.
 
 ```bash
+# Primary (Terragrunt)
+terragrunt apply --terragrunt-working-dir $CDS_INFRA_DEPLOY_DIR/venues/dev/o11y-cloudfront-batch/iam/policies
+
+# Fallback (Task)
 task iam:plan   VENUE=dev
 task iam:deploy VENUE=dev
 ```
@@ -151,7 +156,15 @@ This publishes `/pds/o11y-cloudfront-batch/iam/ec2_role_arn` to SSM.
 
 ### Step 2.5: Grant OpenSearch access — o11y-platform repo
 
-Back in [o11y-platform](https://github.com/NASA-PDS/o11y-platform): set `o11y_cloudfront_batch_enabled = true` in the `opensearch` tfvars and re-run `task opensearch:deploy`. This only updates the OpenSearch access policy to add the Logstash role as a principal — no domain redeployment (seconds, not minutes). Skip this if it's already `true` from a prior deploy.
+Back in [o11y-platform](https://github.com/NASA-PDS/o11y-platform): set `o11y_cloudfront_batch_enabled = true` in the `opensearch` tfvars and re-apply. This only updates the OpenSearch access policy to add the Logstash role as a principal — no domain redeployment (seconds, not minutes). Skip this if it's already `true` from a prior deploy.
+
+```bash
+# Primary (Terragrunt)
+terragrunt apply --terragrunt-working-dir $CDS_INFRA_DEPLOY_DIR/venues/dev/o11y-platform/opensearch
+
+# Fallback (Task — from o11y-platform repo)
+task opensearch:deploy VENUE=dev
+```
 
 ---
 
@@ -160,6 +173,10 @@ Back in [o11y-platform](https://github.com/NASA-PDS/o11y-platform): set `o11y_cl
 Requires `iam:PassRole`. Must be run by a system administrator. Run after Steps 0–2.5 — **Logstash will get 403s from OpenSearch if Step 2.5 hasn't run yet**, even though this step's `terraform apply` succeeds regardless.
 
 ```bash
+# Primary (Terragrunt)
+terragrunt apply --terragrunt-working-dir $CDS_INFRA_DEPLOY_DIR/venues/dev/o11y-cloudfront-batch/logstash
+
+# Fallback (Task)
 task logstash:plan   VENUE=dev
 task logstash:deploy VENUE=dev
 ```
@@ -390,9 +407,29 @@ Then test, commit, and redeploy via the standard config-update workflow above.
 
 ---
 
+## Upgrade
+
+Each component can be upgraded independently once the stack is fully deployed.
+
+**Logstash version** — update `logstash_version` in cds-infra-deploy tfvars and re-apply `logstash/` via Terragrunt. The EC2 is replaced (new instance with updated RPM). Run the smoke test after. See [logstash/README.md](logstash/README.md) for manual steps on an existing EC2.
+
+**Logstash configuration** — edit files under `config/logstash/config/`, push to main, then SSM into the EC2 and re-run `scripts/logstash-deploy.sh`. No Terraform change needed.
+
+**IAM policy** — update policy documents in `iam/policies/` and re-apply via Terragrunt. No resource replacement.
+
+**S3 bucket settings** — lifecycle, encryption, and versioning changes take effect on re-apply of `s3/`.
+
+---
+
 ## Teardown
 
 ```bash
+# Primary (Terragrunt) — destroy in reverse order
+terragrunt destroy --terragrunt-working-dir $CDS_INFRA_DEPLOY_DIR/venues/dev/o11y-cloudfront-batch/logstash
+terragrunt destroy --terragrunt-working-dir $CDS_INFRA_DEPLOY_DIR/venues/dev/o11y-cloudfront-batch/iam/policies
+terragrunt destroy --terragrunt-working-dir $CDS_INFRA_DEPLOY_DIR/venues/dev/o11y-cloudfront-batch/s3
+
+# Fallback (Task)
 task logstash:destroy   VENUE=dev   # Logstash EC2 + launch template  🔐 admin
 task iam:destroy        VENUE=dev   # IAM policy + role attachment     🔐 admin
 task s3:destroy         VENUE=dev   # S3 bucket (does not delete objects)
