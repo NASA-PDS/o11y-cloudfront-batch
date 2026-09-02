@@ -1,9 +1,3 @@
-resource "aws_ssm_parameter" "ec2_role_arn" {
-  name        = "/pds/o11y-cloudfront-batch/iam/ec2_role_arn"
-  type        = "String"
-  value       = "arn:${var.partition}:iam::${data.aws_caller_identity.current.account_id}:role/${var.ec2_role_name}"
-  description = "ARN of the EC2 role used by the Logstash instance — currently the shared instance profile, update when a dedicated role exists"
-}
 
 resource "aws_ssm_parameter" "logstash_instance_id" {
   name        = "/pds/o11y-cloudfront-batch/ec2/logstash_instance_id"

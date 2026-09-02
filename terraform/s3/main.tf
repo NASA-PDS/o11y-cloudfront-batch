@@ -15,20 +15,6 @@ module "s3_bucket" {
     Version = "2012-10-17",
     Statement = [
       {
-        Sid    = "AllowEC2Role",
-        Effect = "Allow",
-        Principal = {
-          AWS = [
-            "arn:${var.partition}:iam::${data.aws_caller_identity.current.account_id}:role/${var.ec2_role_name}"
-          ]
-        },
-        Action = ["s3:GetBucketLocation", "s3:ListBucket", "s3:GetObject", "s3:GetObjectVersion"],
-        Resource = [
-          "arn:${var.partition}:s3:::${local.s3_bucket_name}",
-          "arn:${var.partition}:s3:::${local.s3_bucket_name}/*"
-        ]
-      },
-      {
         Sid       = "AllowSSLRequestsOnly",
         Effect    = "Deny",
         Principal = "*",

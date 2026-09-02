@@ -40,7 +40,3 @@ variable "s3_bucket_prefix" {
   type        = string
 }
 
-variable "ec2_role_name" {
-  description = "Existing PDS EC2 IAM role name — used in the S3 bucket policy AllowEC2Role statement"
-  type        = string
-}
