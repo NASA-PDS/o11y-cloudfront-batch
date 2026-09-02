@@ -1,6 +1,6 @@
 #!/bin/bash
 # smoke-test.sh — Verify S3, OpenSearch, and Logstash are all reachable and auth works.
-# Run from the Logstash EC2 after deployment, as the logstash user (no sudo).
+# Run from the Logstash EC2 after deployment, as the pdsops user (no sudo).
 #
 # Usage:
 #   bash /opt/o11y-cloudfront-batch/scripts/smoke-test.sh

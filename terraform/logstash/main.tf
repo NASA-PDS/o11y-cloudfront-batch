@@ -1,8 +1,7 @@
 # ---------------------------------------------------------------------------
 # Logstash EC2 instance
 # ---------------------------------------------------------------------------
-# AMI: Amazon Linux 2023 (owner 794625662971), consistent with
-# the pattern used in pds-tf-modules/terraform/modules/ec2/main.tf.
+# AMI: SA-managed private image (key-user pdsops pre-provisioned).
 # Logstash is installed directly via RPM (not Docker).
 #
 # Access: AWS Systems Manager (MCP-SSM-CloudWatch instance profile).
@@ -99,7 +98,7 @@ resource "aws_instance" "logstash" {
 # SSM Run-As session document
 # ---------------------------------------------------------------------------
 # Lets `aws ssm start-session --document-name <this>` land directly as the
-# `logstash` OS user instead of root/ssm-user, so operators never need sudo
+# `pdsops` key-user instead of root/ssm-user, so operators never need sudo
 # for logstash execution, logging, monitoring, or config (git) updates —
 # `scripts/logstash-deploy.sh` runs entirely under this account.
 #
@@ -111,13 +110,13 @@ resource "aws_instance" "logstash" {
 # addition to the instance ARN) is an IAM/SSO concern owned outside this
 # repo — this module only manages the EC2 instance role, not human roles.
 resource "aws_ssm_document" "logstash_runas" {
-  name            = "${local.ec2_name}-runas-logstash"
+  name            = "${local.ec2_name}-runas-pdsops"
   document_type   = "Session"
   document_format = "JSON"
 
   content = jsonencode({
     schemaVersion = "1.0"
-    description   = "SSM session landing directly as the logstash service user (no sudo)."
+    description   = "SSM session landing directly as the pdsops key-user (no sudo)."
     sessionType   = "Standard_Stream"
     inputs = {
       s3BucketName                = ""
@@ -128,7 +127,7 @@ resource "aws_ssm_document" "logstash_runas" {
       cloudWatchStreamingEnabled  = false
       kmsKeyId                    = ""
       runAsEnabled                = true
-      runAsDefaultUser            = "logstash"
+      runAsDefaultUser            = "pdsops"
       idleSessionTimeout          = "20"
       maxSessionDuration          = ""
       shellProfile = {

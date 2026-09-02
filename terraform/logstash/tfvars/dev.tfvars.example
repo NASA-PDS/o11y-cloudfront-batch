@@ -10,7 +10,7 @@ venue = "dev"
 
 vpc_id                  = ""                    # VPC ID for the Logstash EC2
 ec2_security_group_name = "<mcp-ec2-sg-name>"   # Name of the MCP EC2 security group
-ami_id                  = "<ami-id>"             # AMI ID for the Logstash EC2 instance
+ami_id                  = "<ami-id>"             # SA-managed private AMI (pdsops key-user pre-provisioned)
 logstash_instance_type  = "t3.large"
 logstash_version        = "8.17.0"
 s3_cf_bucket_name       = "<cf-logs-bucket-name>"  # S3 bucket for CloudFront logs (EN node only)

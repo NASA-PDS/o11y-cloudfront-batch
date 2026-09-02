@@ -194,29 +194,29 @@ task logstash:deploy VENUE=dev
 ### Step 4: Initialize Logstash on the EC2
 
 On **new EC2 deployments**, the userdata script runs `scripts/logstash-bootstrap.sh`
-(root, one-time: packages, Logstash RPM, provisions the `logstash` account)
-followed by `scripts/logstash-deploy.sh` (as the `logstash` user, no sudo:
+(root, one-time: packages, Logstash RPM, configures the `pdsops` key-user)
+followed by `scripts/logstash-deploy.sh` (as the `pdsops` user, no sudo:
 config + service start) automatically at first boot.
 
-For an **already-running EC2** (e.g., after recreating the OpenSearch domain, or after a manual deployment where the env file is wrong), SSM in and re-run the deploy script with the required env vars — no sudo needed once you're the `logstash` user:
+For an **already-running EC2** (e.g., after recreating the OpenSearch domain, or after a manual deployment where the env file is wrong), SSM in and re-run the deploy script with the required env vars — no sudo needed once you're the `pdsops` user:
 
 ```bash
 # SSM into the EC2 — this lands as root regardless of the Run-As document
 # unless your IAM identity has ssm:StartSession on that document's ARN, so
-# don't count on landing as logstash automatically:
+# don't count on landing as pdsops automatically:
 aws ssm start-session \
   --target $(aws ssm get-parameter \
     --name /pds/o11y-cloudfront-batch/ec2/logstash_instance_id \
     --query Parameter.Value --output text)
 
-# Switch to logstash before doing anything else:
-sudo runuser -l logstash
+# Switch to pdsops before doing anything else:
+sudo runuser -l pdsops
 cd /opt/o11y-cloudfront-batch
 
 # Verify what's currently in the env file
 cat /etc/logstash/env
 
-# Re-run the deploy script from the already-cloned, logstash-owned repo.
+# Re-run the deploy script from the already-cloned, pdsops-owned repo.
 # S3_BUCKET_NAME and OPENSEARCH_ENDPOINT are fetched from SSM automatically.
 # S3_CF_BUCKET_NAME must be set explicitly (not in SSM).
 S3_CF_BUCKET_NAME=<cf-logs-bucket-name> bash scripts/logstash-deploy.sh
@@ -227,12 +227,12 @@ REPO_BRANCH=<your-branch> S3_CF_BUCKET_NAME=<cf-logs-bucket-name> bash scripts/l
 
 > If Logstash itself isn't installed yet (e.g. a fresh instance where
 > bootstrap never ran), `logstash-deploy.sh` will refuse and tell you to
-> have an admin run `sudo bash scripts/logstash-bootstrap.sh` first —
+> have an SA run `sudo bash scripts/logstash-bootstrap.sh` first —
 > that's the only step in this whole workflow that ever needs sudo, and
 > it's rare (install/upgrade only).
 
 The deploy script will:
-1. Clone/update the o11y-cloudfront-batch repo to `/opt/o11y-cloudfront-batch` (owned by `logstash`)
+1. Clone/update the o11y-cloudfront-batch repo to `/opt/o11y-cloudfront-batch` (owned by `pdsops`)
 2. Copy Logstash pipeline config to `/etc/logstash`
 3. Build `pipelines.yml` and `pipelines/*.conf` from templates
 4. Apply the OpenSearch ECS index template to the new domain
@@ -259,7 +259,7 @@ The deploy script will:
 
 **Tail logs and verify startup:**
 ```bash
-# journalctl requires adm/wheel group membership the logstash user doesn't
+# journalctl requires adm/wheel group membership the pdsops user doesn't
 # have — use the log file directly instead:
 tail -f /var/log/logstash/logstash-plain.log
 ```
@@ -372,7 +372,7 @@ aws ssm start-session \
     --query Parameter.Value --output text)
 
 # Lands as root — switch first:
-sudo runuser -l logstash
+sudo runuser -l pdsops
 cd /opt/o11y-cloudfront-batch
 
 S3_CF_BUCKET_NAME=<cf-logs-bucket-name> bash scripts/logstash-deploy.sh

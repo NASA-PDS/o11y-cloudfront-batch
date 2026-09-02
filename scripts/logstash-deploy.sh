@@ -1,6 +1,6 @@
 #!/bin/bash
 # logstash-deploy.sh — Deploy config and (re)start Logstash on the
-# o11y-cloudfront-batch EC2. No sudo required — run entirely as the `logstash` user.
+# o11y-cloudfront-batch EC2. No sudo required — run entirely as the `pdsops` key-user.
 #
 # Safe to re-run: pulls latest config, updates the env file, and restarts
 # the systemd --user logstash service.
@@ -12,7 +12,7 @@
 #   bash /opt/o11y-cloudfront-batch/scripts/logstash-deploy.sh
 #
 # Requires scripts/logstash-bootstrap.sh to have been run first (root, once)
-# to install Logstash and provision this account — this script will refuse
+# to install Logstash and configure the pdsops account — this script will refuse
 # to run otherwise.
 #
 # Optional env overrides (all auto-populated from SSM/metadata if not set):
@@ -50,7 +50,7 @@
 set -euo pipefail
 
 if [ "$(id -u)" -eq 0 ]; then
-  echo "ERROR: logstash-deploy.sh must NOT be run as root — run it as the logstash user." >&2
+  echo "ERROR: logstash-deploy.sh must NOT be run as root — run it as the pdsops user." >&2
   exit 1
 fi
 
@@ -75,7 +75,7 @@ S3_CF_BUCKET_NAME="${S3_CF_BUCKET_NAME:-}"
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 
 if [ ! -f /usr/share/logstash/bin/logstash ]; then
-  echo "ERROR: Logstash is not installed. An admin must run 'sudo bash scripts/logstash-bootstrap.sh' first." >&2
+  echo "ERROR: Logstash is not installed. An SA must run 'sudo bash scripts/logstash-bootstrap.sh' first." >&2
   exit 1
 fi
 
@@ -215,3 +215,4 @@ systemctl --user status logstash --no-pager
 echo ""
 echo "=== Deploy complete ==="
 echo "Tail logs with: tail -f /var/log/logstash/logstash-plain.log"
+

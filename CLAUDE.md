@@ -208,26 +208,26 @@ aws ssm start-session --target <instance-id>
 ```
 
 **This lands as `root`.** Logstash runs as a `systemd --user` service under
-a shared `logstash` account, and day-2 operations (service control, logs,
+the `pdsops` key-user account, and day-2 operations (service control, logs,
 config redeploys via `scripts/logstash-deploy.sh`) are meant to run as that
 account with no sudo — but the session does not land there automatically.
 Switch in place immediately after connecting:
 
 ```bash
-sudo runuser -l logstash    # or: su - logstash
+sudo runuser -l pdsops    # or: su - pdsops
 cd /opt/o11y-cloudfront-batch
 ```
 
 A custom SSM Run-As document (`aws_ssm_document.logstash_runas` in
 `terraform/logstash/main.tf`) can make `--document-name <doc>` land
-directly as `logstash`, but it requires an IAM grant
+directly as `pdsops`, but it requires an IAM grant
 (`ssm:StartSession` on the document ARN) that may not be provisioned —
 don't assume it works without confirming; the `runuser` switch above is
 the reliable fallback regardless of IAM state.
 
-Once you're `logstash`: `systemctl --user status logstash`,
+Once you're `pdsops`: `systemctl --user status logstash`,
 `tail -f /var/log/logstash/logstash-plain.log` for logs (`journalctl`
-needs adm/wheel group membership `logstash` doesn't have), `bash
+needs adm/wheel group membership `pdsops` doesn't have), `bash
 scripts/logstash-deploy.sh` to redeploy config. Full runbooks:
 `terraform/logstash/README.md` and the root `README.md` Quick Reference.
 
@@ -236,7 +236,7 @@ scripts/logstash-deploy.sh` to redeploy config. Full runbooks:
 Userdata only installs the SSM agent — everything else is done manually
 after connecting. Two-phase process:
 
-**Phase 1 — SA (root required):** Install Logstash + provision the `logstash` account.
+**Phase 1 — SA (root required):** Install Logstash + configure the `pdsops` key-user.
 The bootstrap script is repo-independent and can be piped directly from GitHub:
 
 ```bash
@@ -248,7 +248,7 @@ curl -fsSL https://raw.githubusercontent.com/NASA-PDS/o11y-cloudfront-batch/main
 `REPO_DIR` defaults to `/opt/o11y-cloudfront-batch`; override to `/usr/local/applications/o11y-cloudfront-batch` if required by local policy.
 
 ```bash
-sudo runuser -l logstash
+sudo runuser -l pdsops
 export REPO_DIR=/opt/o11y-cloudfront-batch
 export REPO_BRANCH=main
 export S3_CF_BUCKET_NAME=<cf-logs-bucket-or-empty-string>
