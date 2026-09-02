@@ -36,7 +36,7 @@ plus data migration — so `local.s3_bucket_name` stays fixed regardless of futu
 
 ## Deploy
 
-All variables are managed as Terragrunt inputs in [cds-infra-deploy](https://github.com/NASA-PDS/cds-infra-deploy). Run from that repo:
+All variables are managed as Terragrunt inputs in `cds-infra-deploy`. Run from that repo:
 
 ```bash
 task plan  VENUE=dev COMPONENT=o11y-cloudfront-batch/s3

@@ -84,7 +84,7 @@ only for deliberate admin actions like a Logstash version upgrade.
 
 ## Deploy
 
-All variables are managed as Terragrunt inputs in [cds-infra-deploy](https://github.com/NASA-PDS/cds-infra-deploy). Run from that repo:
+All variables are managed as Terragrunt inputs in `cds-infra-deploy`. Run from that repo:
 
 ```bash
 task plan  VENUE=dev COMPONENT=o11y-cloudfront-batch/logstash
