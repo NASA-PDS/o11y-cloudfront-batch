@@ -4,7 +4,7 @@ Creates the S3 log bucket for o11y-cloudfront-batch and publishes its name to SS
 
 ## Resources
 
-- `module.s3_bucket` — S3 bucket via [pds-tf-modules](https://github.com/NASA-PDS/pds-tf-modules) with SSE, public-access blocks disabled (enforced at the account level), and an EC2-role allow + SSL-only deny bucket policy
+- `module.s3_bucket` — S3 bucket via [pds-tf-modules](https://github.com/NASA-PDS/pds-tf-modules) with SSE, public-access blocks disabled (enforced at the account level), and an SSL-only deny bucket policy
 - `aws_s3_bucket_lifecycle_configuration.lifecycle` — aborts incomplete multipart uploads after 7 days; transitions all objects to Intelligent-Tiering immediately
 - `aws_ssm_parameter.s3_bucket_name` — publishes the bucket name to `/pds/o11y-cloudfront-batch/s3/bucket_name` for consumption by the logstash module
 
@@ -19,7 +19,6 @@ plus data migration — so `local.s3_bucket_name` stays fixed regardless of futu
 | Name | Type | Default | Description |
 |---|---|---|---|
 | `s3_bucket_prefix` | `string` | — | Prefix for the S3 bucket name (e.g. `pds-dev-gh01dc`). Bucket is named `<prefix>-web-analytics`. |
-| `ec2_role_name` | `string` | — | Existing EC2 IAM role name — granted `s3:*` on the bucket. |
 | `aws_region` | `string` | `us-west-2` | AWS region. |
 | `partition` | `string` | `aws` | AWS partition. |
 | `venue` | `string` | — | Deployment venue (`dev`, `test`, `prod`). |
@@ -37,14 +36,9 @@ plus data migration — so `local.s3_bucket_name` stays fixed regardless of futu
 
 ## Deploy
 
+All variables are managed as Terragrunt inputs in [cds-infra-deploy](https://github.com/NASA-PDS/cds-infra-deploy). Run from that repo:
+
 ```bash
-cp tfvars/dev.tfvars.example tfvars/dev.tfvars
-# edit tfvars/dev.tfvars
-
-task s3:plan   VENUE=dev
-task s3:deploy VENUE=dev
+task plan  VENUE=dev COMPONENT=o11y-cloudfront-batch/s3
+task apply VENUE=dev COMPONENT=o11y-cloudfront-batch/s3
 ```
-
-Shared values (`aws_region`, `tenant`, `ec2_role_name`, etc.) come from `../tfvars/common-<venue>.tfvars`.
-
-> **Expected warning:** `common-<venue>.tfvars` includes `resource_prefix` (used by the logstash and iam modules) but the S3 module does not declare it. Terraform will emit a "Value for undeclared variable" warning for `resource_prefix` on every plan/apply — this is harmless and expected.

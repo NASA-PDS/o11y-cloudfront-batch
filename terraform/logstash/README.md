@@ -16,7 +16,6 @@ below.
 
 - `aws_launch_template.logstash`, `aws_instance.logstash` — EC2 launch template + instance, only created when `manage_ec2_instance = true`; userdata only installs the SSM agent — Logstash install and service setup are done manually post-boot (see [First-boot setup](#first-boot-setup)). No SSH; access via SSM Session Manager.
 - `aws_ssm_document.logstash_runas` — custom SSM Session document (Run-As `pdsops`) so operators never need sudo for day-2 ops; always created, works against any instance (created here or existing)
-- `aws_ssm_parameter.ec2_role_arn` — publishes EC2 role ARN to `/pds/o11y-cloudfront-batch/iam/ec2_role_arn`
 - `aws_ssm_parameter.logstash_instance_id` — publishes the instance ID (created, or `existing_instance_id`) to `/pds/o11y-cloudfront-batch/ec2/logstash_instance_id`
 - `aws_ssm_parameter.logstash_runas_document` — publishes the Run-As document name to `/pds/o11y-cloudfront-batch/ssm/logstash_runas_document`
 
@@ -85,29 +84,25 @@ only for deliberate admin actions like a Logstash version upgrade.
 
 ## Deploy
 
+All variables are managed as Terragrunt inputs in [cds-infra-deploy](https://github.com/NASA-PDS/cds-infra-deploy). Run from that repo:
+
 ```bash
-cp tfvars/dev.tfvars.example tfvars/dev.tfvars
-# edit tfvars/dev.tfvars
-
-task logstash:plan   VENUE=dev
-task logstash:deploy VENUE=dev
+task plan  VENUE=dev COMPONENT=o11y-cloudfront-batch/logstash
+task apply VENUE=dev COMPONENT=o11y-cloudfront-batch/logstash
 ```
-
-Shared values come from `../tfvars/common-<venue>.tfvars`.
 
 ## Using an existing EC2 (`manage_ec2_instance = false`)
 
-Set in tfvars:
+Set in the venue's `terragrunt.hcl`:
 
 ```hcl
 manage_ec2_instance  = false
 existing_instance_id = "i-0123456789abcdef0"
 ```
 
-`task logstash:deploy` then only creates/updates the SSM Run-As document and
-publishes `/pds/o11y-cloudfront-batch/ec2/logstash_instance_id` (from
-`existing_instance_id`) and `/pds/o11y-cloudfront-batch/iam/ec2_role_arn` — it never
-touches the EC2 itself.
+`task apply VENUE=dev COMPONENT=o11y-cloudfront-batch/logstash` then only creates/updates
+the SSM Run-As document and publishes `/pds/o11y-cloudfront-batch/ec2/logstash_instance_id`
+(from `existing_instance_id`) — it never touches the EC2 itself.
 
 **Connecting to the box is entirely outside this module's control.** These
 instructions work regardless of *how* you get a root shell — an SSM
