@@ -94,25 +94,30 @@ if [ -z "$PDSOPS_HOME" ]; then
   exit 1
 fi
 
+# Don't assume the AMI gave pdsops a same-named primary group — use
+# whatever its actual primary group is.
+PDSOPS_GROUP="$(id -gn "$PDSOPS_USER")"
+PDSOPS_OWNER="$PDSOPS_USER:$PDSOPS_GROUP"
+
 # Ensure interactive shell
 usermod --shell /bin/bash "$PDSOPS_USER"
 mkdir -p "$PDSOPS_HOME"
-chown "$PDSOPS_USER:$PDSOPS_USER" "$PDSOPS_HOME"
+chown "$PDSOPS_OWNER" "$PDSOPS_HOME"
 
 # sincedb: persists S3 read position across restarts; app + service logs
 mkdir -p /var/lib/logstash/plugins/inputs/s3 /var/log/logstash
-chown -R "$PDSOPS_USER:$PDSOPS_USER" /var/lib/logstash /var/log/logstash /usr/share/logstash/vendor
+chown -R "$PDSOPS_OWNER" /var/lib/logstash /var/log/logstash /usr/share/logstash/vendor
 
 # Config dir: owned entirely by pdsops so day-2 config deploys never need
 # root. This deliberately loosens Elastic's default root:logstash (group
 # read-only) hardening — accepted tradeoff for no-sudo operation.
 mkdir -p /etc/logstash
-chown -R "$PDSOPS_USER:$PDSOPS_USER" /etc/logstash
+chown -R "$PDSOPS_OWNER" /etc/logstash
 chmod -R u+rwX /etc/logstash
 
 # Repo dir: hand it off to pdsops.
 if [ -d "$REPO_DIR" ]; then
-  chown -R "$PDSOPS_USER:$PDSOPS_USER" "$REPO_DIR"
+  chown -R "$PDSOPS_OWNER" "$REPO_DIR"
 fi
 
 # Keep the account running (and its systemd --user manager alive) without an
@@ -134,7 +139,7 @@ for f in "$PDSOPS_HOME/.bash_profile" "$PDSOPS_HOME/.bashrc"; do
     echo 'export XDG_RUNTIME_DIR="/run/user/$(id -u)"' >> "$f"
   fi
 done
-chown "$PDSOPS_USER:$PDSOPS_USER" "$PDSOPS_HOME/.bash_profile" "$PDSOPS_HOME/.bashrc"
+chown "$PDSOPS_OWNER" "$PDSOPS_HOME/.bash_profile" "$PDSOPS_HOME/.bashrc"
 
 # ----------------------------------------
 # 3. Install the user-level systemd unit
@@ -157,7 +162,7 @@ LimitNOFILE=65536
 [Install]
 WantedBy=default.target
 SERVICE
-chown -R "$PDSOPS_USER:$PDSOPS_USER" "$PDSOPS_HOME/.config"
+chown -R "$PDSOPS_OWNER" "$PDSOPS_HOME/.config"
 
 echo ""
 echo "=== Bootstrap complete ==="
