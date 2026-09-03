@@ -115,10 +115,12 @@ mkdir -p /etc/logstash
 chown -R "$PDSOPS_OWNER" /etc/logstash
 chmod -R u+rwX /etc/logstash
 
-# Repo dir: hand it off to pdsops.
-if [ -d "$REPO_DIR" ]; then
-  chown -R "$PDSOPS_OWNER" "$REPO_DIR"
-fi
+# Repo dir: create (if this is a fresh instance) and hand it off to
+# pdsops. /opt itself is root-owned, so pdsops can't create it on first
+# deploy without this — chown-only (skipping mkdir) left first-time
+# `git clone` failing with "Permission denied".
+mkdir -p "$REPO_DIR"
+chown -R "$PDSOPS_OWNER" "$REPO_DIR"
 
 # Keep the account running (and its systemd --user manager alive) without an
 # active login session, so `systemctl --user` works across reboots/reconnects.
