@@ -12,7 +12,7 @@ data "aws_ssm_parameter" "opensearch_endpoint" {
 
 # Reads the EC2 instance profile name published by terraform/iam/roles/.
 data "aws_ssm_parameter" "ec2_instance_profile_name" {
-  name = "/pds/${var.component}/iam/roles/ec2-instance-profile-name"
+  name = "/pds/${var.component}/iam/roles/ec2/instance-profile-name"
 }
 
 # TODO: vpc_id and ec2_security_group_name should be sourced from SSM once
