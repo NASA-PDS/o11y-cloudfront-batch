@@ -4,5 +4,3 @@
 
 venue     = "pds-cds-dev"
 managedby = "<your-email>"
-
-permissions_boundary_arn = "<arn:aws:iam::<account-id>:policy/<boundary-policy-name>>"

@@ -29,7 +29,3 @@ variable "managedby" {
   description = "Email address of the team or person managing this resource"
 }
 
-variable "permissions_boundary_arn" {
-  type        = string
-  description = "ARN of the permissions boundary policy to attach to IAM roles"
-}
