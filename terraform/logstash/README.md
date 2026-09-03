@@ -52,6 +52,9 @@ only for deliberate admin actions like a Logstash version upgrade.
 |---|---|
 | `/pds/o11y-cloudfront-batch/s3/bucket_name` | `s3` module |
 | `/pds/o11y-platform/opensearch/opensearch_endpoint` | `o11y-platform` repo |
+| `/pds/o11y-cloudfront-batch/iam/roles/ec2/instance-profile-name` | `iam/roles` module |
+
+Deploy `iam/roles`, `s3`, and the o11y-platform OpenSearch module before applying this module.
 
 ## Inputs
 
@@ -59,10 +62,9 @@ only for deliberate admin actions like a Logstash version upgrade.
 |---|---|---|---|
 | `manage_ec2_instance` | `bool` | `true` | Whether this module creates the EC2. Set `false` to reuse an existing instance. |
 | `existing_instance_id` | `string` | `""` | Instance ID to publish when `manage_ec2_instance = false`. Required in that mode. |
-| `ec2_role_name` | `string` | — | Existing EC2 IAM role / instance profile name. Always required. |
+| `ami_id` | `string` | — | AMI ID for the EC2 instance. Must be the exact SA-provided AMI ID for the target venue. |
 | `vpc_id` | `string` | `""` | VPC ID for subnet and security group lookup. Required when `manage_ec2_instance = true`. |
 | `ec2_security_group_name` | `string` | `""` | Name of the EC2 security group to attach. Required when `manage_ec2_instance = true`. |
-| `mcp_ami_owner_id` | `string` | `""` | AWS account ID that owns the Amazon Linux 2023 AMIs. Required when `manage_ec2_instance = true`. |
 | `resource_prefix` | `string` | — | Prefix for all resource names (e.g. `pds-dev`). No CI/CD identifiers. |
 | `s3_cf_bucket_name` | `string` | `""` | S3 bucket containing CloudFront logs (EN node only). Leave empty to skip. |
 | `logstash_instance_type` | `string` | `t3.large` | EC2 instance type. Only used when `manage_ec2_instance = true`. |
