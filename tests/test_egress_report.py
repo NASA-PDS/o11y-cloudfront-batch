@@ -1,4 +1,5 @@
 """Unit tests for the EgressReporter class."""
+
 import os
 import tempfile
 import unittest
@@ -6,7 +7,6 @@ from unittest.mock import MagicMock
 from unittest.mock import patch
 
 from pds.o11y_batch.egress_report import EgressReporter
-
 
 SAMPLE_RESPONSE = {
     "aggregations": {
@@ -209,9 +209,7 @@ class TestEgressReporter(unittest.TestCase):
         with tempfile.NamedTemporaryFile("r", delete=False, suffix=".html") as f:
             path = f.name
         try:
-            reporter = make_reporter(
-                smtp_env_file=None, smtp_config_ssm_path=None, dry_run=True, output_file=path
-            )
+            reporter = make_reporter(smtp_env_file=None, smtp_config_ssm_path=None, dry_run=True, output_file=path)
             reporter.run()
 
             mock_send_email.assert_not_called()

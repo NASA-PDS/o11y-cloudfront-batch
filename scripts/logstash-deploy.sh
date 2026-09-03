@@ -215,4 +215,3 @@ systemctl --user status logstash --no-pager
 echo ""
 echo "=== Deploy complete ==="
 echo "Tail logs with: tail -f /var/log/logstash/logstash-plain.log"
-

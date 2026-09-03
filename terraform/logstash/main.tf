@@ -4,11 +4,9 @@
 # AMI: SA-managed private image (key-user pdsops pre-provisioned).
 # Logstash is installed directly via RPM (not Docker).
 #
-# Access: AWS Systems Manager (MCP-SSM-CloudWatch instance profile).
-# No SSH key or inbound security group rules needed.
-#
-# Reads s3_bucket_name from SSM (/pds/o11y-cloudfront-batch/s3/bucket_name) so this
-# module can be applied independently of the S3 root module.
+# Access: AWS Systems Manager (no SSH key or inbound SG rules needed).
+# Instance role is managed separately in terraform/iam/roles/ and its
+# profile name is read from SSM at /pds/<component>/iam/roles/ec2-instance-profile-name.
 #
 # EC2 creation is optional (var.manage_ec2_instance, default true) — set to
 # false to point this module at an existing, externally-managed EC2 (e.g.
@@ -18,7 +16,7 @@
 # instance's ID. See terraform/logstash/README.md "Using an existing EC2"
 # for the manual setup steps (logstash-bootstrap.sh + logstash-deploy.sh).
 #
-# All data sources (SSM parameters, AMI/SG/subnet lookups) live in data.tf.
+# All data sources (SSM parameters, SG/subnet lookups) live in data.tf.
 
 locals {
   ec2_name = "pds-${var.component}"
@@ -32,64 +30,29 @@ locals {
   }
 }
 
-resource "aws_launch_template" "logstash" {
-  count = var.manage_ec2_instance ? 1 : 0
+module "ec2" {
+  source = "../../../../pds-tf-modules/terraform/modules/ec2"
+  count  = var.manage_ec2_instance ? 1 : 0
 
-  name_prefix   = "${local.ec2_name}-"
-  image_id      = var.ami_id
-  instance_type = var.logstash_instance_type
+  ami_id           = var.ami_id
+  instance_profile = data.aws_ssm_parameter.ec2_instance_profile_name.value
 
-  network_interfaces {
-    associate_public_ip_address = false
-    subnet_id                   = sort(data.aws_subnets.private[0].ids)[0]
-    security_groups             = [data.aws_security_group.mcp_ec2[0].id]
-  }
+  ec2_instance_configs = [{
+    instance_name   = local.ec2_name
+    instance_type   = var.logstash_instance_type
+    subnet_id       = sort(data.aws_subnets.private[0].ids)[0]
+    security_groups = [data.aws_security_group.logstash_ec2[0].id]
+    user_data       = base64encode(templatefile("${path.module}/../templates/logstash-userdata.sh.tpl", {
+      aws_region = var.aws_region
+    }))
+  }]
 
-  iam_instance_profile {
-    name = var.ec2_role_name
-  }
-
-  block_device_mappings {
-    device_name = "/dev/xvda"
-    ebs {
-      volume_size           = 30
-      volume_type           = "gp3"
-      encrypted             = true
-      delete_on_termination = false
-    }
-  }
-
-  user_data = base64encode(templatefile("${path.module}/../templates/logstash-userdata.sh.tpl", {
-    aws_region = var.aws_region
-  }))
-
-  tag_specifications {
-    resource_type = "instance"
-    tags          = local.logstash_tags
-  }
-
-  tag_specifications {
-    resource_type = "volume"
-    tags          = local.logstash_tags
-  }
-
-  tags = local.logstash_tags
-}
-
-resource "aws_instance" "logstash" {
-  count = var.manage_ec2_instance ? 1 : 0
-
-  launch_template {
-    id      = aws_launch_template.logstash[0].id
-    version = "$Latest"
-  }
-
-  tags = local.logstash_tags
-
-  lifecycle {
-    # Cloud automation stamps Audit, CreatedBy, CreationTime on launch — ignore to avoid stripping compliance tags.
-    # user_data is managed via launch template; ignore the value stored on the instance itself.
-    ignore_changes = [tags["Audit"], tags["CreatedBy"], tags["CreationTime"], user_data]
+  required_tags = {
+    tenant    = var.tenant
+    venue     = var.venue
+    component = var.component
+    managedby = var.managedby
+    cicd      = var.cicd
   }
 }
 
@@ -139,4 +102,3 @@ resource "aws_ssm_document" "logstash_runas" {
 
   tags = local.logstash_tags
 }
-
