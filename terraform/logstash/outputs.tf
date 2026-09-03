@@ -2,7 +2,7 @@
 resource "aws_ssm_parameter" "logstash_instance_id" {
   name        = "/pds/o11y-cloudfront-batch/ec2/logstash_instance_id"
   type        = "String"
-  value       = var.manage_ec2_instance ? aws_instance.logstash[0].id : var.existing_instance_id
+  value       = var.manage_ec2_instance ? module.ec2[0].ec2_instance_id[0] : var.existing_instance_id
   description = "Instance ID of the o11y-cloudfront-batch Logstash EC2 (created by this module, or an existing instance when manage_ec2_instance = false)"
 
   lifecycle {
