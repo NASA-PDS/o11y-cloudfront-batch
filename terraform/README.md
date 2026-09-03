@@ -57,137 +57,74 @@ flowchart TD
 
 ## Prerequisites
 
-- [Terraform](https://developer.hashicorp.com/terraform/downloads) >= 1.0
+- [Terragrunt](https://terragrunt.gruntwork.io/docs/getting-started/install/) >= 0.55
 - [Task](https://taskfile.dev) — `brew install go-task/tap/go-task`
 - AWS CLI + [Session Manager plugin](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html) — `brew install --cask session-manager-plugin`
+- A local checkout of `cds-infra-deploy` — all Terragrunt inputs live in `venues/<venue>/o11y-cloudfront-batch/`
 - AWS credentials exported:
   ```bash
   eval $(aws configure export-credentials --profile <your-profile> --format env)
+  unset AWS_PROFILE  # required for Terraform S3 backend compatibility
   ```
-
----
-
-## Setup
-
-### 1. tfvars
-
-tfvars for all venues are tracked in [cds-infra-deploy](https://github.com/NASA-PDS/cds-infra-deploy) (private) at
-`venues/<venue>/o11y-cloudfront-batch/`, not in this repo —
-`tfvars/`, `s3/tfvars/`, `iam/policies/tfvars/`, and `logstash/tfvars/` here are all gitignored.
-
-**Primary (Terragrunt via cds-infra-deploy):**
-
-```bash
-export CDS_INFRA_DEPLOY_DIR=/path/to/cds-infra-deploy
-eval $(aws configure export-credentials --profile <your-profile> --format env)
-unset AWS_PROFILE
-```
-
-**Fallback (local iteration — `LOCAL=1`):**
-
-For personal iteration before promoting values to cds-infra-deploy, use the repo-local gitignored tfvars:
-
-```bash
-cd terraform/
-cp tfvars/common.tfvars.example             tfvars/common-dev.tfvars
-cp s3/tfvars/dev.tfvars.example             s3/tfvars/dev.tfvars
-cp iam/policies/tfvars/dev.tfvars.example   iam/policies/tfvars/dev.tfvars
-cp logstash/tfvars/dev.tfvars.example       logstash/tfvars/dev.tfvars
-# Edit each file — fill in managedby, vpc_id, ec2_security_group_name, s3_cf_bucket_name
-task s3:plan VENUE=dev LOCAL=1
-```
-
-Key values to fill in:
-
-| File (cds-infra-deploy path shown; `LOCAL=1` uses the repo-local path in parens) | Variable | Notes |
-|---|---|---|
-| `common.tfvars` (`tfvars/common-dev.tfvars`) | `managedby` | Your email address |
-| `common.tfvars` (`tfvars/common-dev.tfvars`) | `resource_prefix`, `ec2_role_name` | `resource_prefix` drives IAM policy names; EC2 is named `pds-o11y-cloudfront-batch` (from `component`) |
-| `s3.tfvars` (`s3/tfvars/dev.tfvars`) | `s3_bucket_prefix` | S3 bucket name; may include CI/CD identifiers |
-| `iam-policies.tfvars` (`iam/policies/tfvars/dev.tfvars`) | `logs_s3_bucket_name` | Full S3 bucket name for the IAM policy resource ARN |
-| `logstash.tfvars` (`logstash/tfvars/dev.tfvars`) | `vpc_id`, `ec2_security_group_name`, `s3_cf_bucket_name` | VPC and CloudFront bucket for the EC2 |
-
-### 2. Configure credentials
-
-```bash
-eval $(aws configure export-credentials --profile <your-profile> --format env)
-unset AWS_PROFILE  # required for Terraform S3 backend compatibility
-```
 
 ---
 
 ## Deployment — step by step
 
+All commands run from the `cds-infra-deploy` checkout. See [o11y-platform terraform/README.md](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md) for the full cross-repo deployment flow; the steps below are the o11y-cloudfront-batch subset.
+
 ### Step 0: OpenSearch domain — o11y-platform repo
 
-Deploy from the [o11y-platform](https://github.com/NASA-PDS/o11y-platform) repo first, bootstrapped with `o11y_cloudfront_batch_enabled = false`. The endpoint is published to SSM automatically and consumed here at plan time. The Logstash EC2 role won't be allowed to write to OpenSearch yet — see Step 2.5.
+```bash
+task plan  VENUE=dev COMPONENT=o11y-platform/opensearch
+task apply VENUE=dev COMPONENT=o11y-platform/opensearch
+```
+
+Bootstrapped with `o11y_cloudfront_batch_enabled = false`. Publishes endpoint, ARN, and SG ID to SSM.
 
 ---
 
-### Step 1: S3 bucket — 🔑 Power-User
+### 🔐 Step 1: IAM policy — Admin (`iam:CreatePolicy`, `iam:AttachRolePolicy`)
 
 ```bash
-# Primary (Terragrunt)
-terragrunt apply --working-dir $CDS_INFRA_DEPLOY_DIR/venues/dev/o11y-cloudfront-batch/s3
-
-# Fallback (Task)
-task s3:plan   VENUE=dev
-task s3:deploy VENUE=dev
+task plan  VENUE=dev COMPONENT=o11y-cloudfront-batch/iam/policies
+task apply VENUE=dev COMPONENT=o11y-cloudfront-batch/iam/policies
 ```
+
+Publishes `/pds/o11y-cloudfront-batch/iam/ec2_role_arn` to SSM.
 
 ---
 
-### 🔐 Step 2: IAM policy — admin only
-
-Requires `iam:CreatePolicy` and `iam:AttachRolePolicy`. Must be run by a system administrator.
+### Step 2: S3 bucket — 👤 Power User
 
 ```bash
-# Primary (Terragrunt)
-terragrunt apply --working-dir $CDS_INFRA_DEPLOY_DIR/venues/dev/o11y-cloudfront-batch/iam/policies
-
-# Fallback (Task)
-task iam:plan   VENUE=dev
-task iam:deploy VENUE=dev
+task plan  VENUE=dev COMPONENT=o11y-cloudfront-batch/s3
+task apply VENUE=dev COMPONENT=o11y-cloudfront-batch/s3
 ```
-
-This publishes `/pds/o11y-cloudfront-batch/iam/ec2_role_arn` to SSM.
 
 ---
 
 ### Step 2.5: Grant OpenSearch access — o11y-platform repo
 
-Back in [o11y-platform](https://github.com/NASA-PDS/o11y-platform): set `o11y_cloudfront_batch_enabled = true` in the `opensearch` tfvars and re-apply. This only updates the OpenSearch access policy to add the Logstash role as a principal — no domain redeployment (seconds, not minutes). Skip this if it's already `true` from a prior deploy.
+Set `o11y_cloudfront_batch_enabled = true` in `venues/<venue>/o11y-platform/opensearch/terragrunt.hcl` and re-apply. Access-policy update only — seconds, not minutes. Skip if already `true`.
 
 ```bash
-# Primary (Terragrunt)
-terragrunt apply --working-dir $CDS_INFRA_DEPLOY_DIR/venues/dev/o11y-platform/opensearch
-
-# Fallback (Task — from o11y-platform repo)
-task opensearch:deploy VENUE=dev
+task plan  VENUE=dev COMPONENT=o11y-platform/opensearch
+task apply VENUE=dev COMPONENT=o11y-platform/opensearch
 ```
 
 ---
 
-### 🔐 Step 3: Logstash EC2 — admin only
-
-Requires `iam:PassRole`. Must be run by a system administrator. Run after Steps 0–2.5 — **Logstash will get 403s from OpenSearch if Step 2.5 hasn't run yet**, even though this step's `terraform apply` succeeds regardless.
+### 🔑 Step 3: Logstash EC2 — Platform Engineer (`iam:PassRole`)
 
 ```bash
-# Primary (Terragrunt)
-terragrunt apply --working-dir $CDS_INFRA_DEPLOY_DIR/venues/dev/o11y-cloudfront-batch/logstash
-
-# Fallback (Task)
-task logstash:plan   VENUE=dev
-task logstash:deploy VENUE=dev
+task plan  VENUE=dev COMPONENT=o11y-cloudfront-batch/logstash
+task apply VENUE=dev COMPONENT=o11y-cloudfront-batch/logstash
 ```
 
-> EC2 creation is optional (`manage_ec2_instance`, default `true`). Prod
-> typically reuses an existing EC2 instead — set `manage_ec2_instance =
-> false` and `existing_instance_id` in `tfvars/prod.tfvars`. This step then
-> only manages the SSM Run-As session document and publishes SSM
-> parameters; it never touches the EC2. See
-> [`terraform/logstash/README.md`](logstash/README.md#using-an-existing-ec2-manage_ec2_instance--false)
-> for the manual Logstash install steps on that existing instance.
+**Logstash will get 403s from OpenSearch if Step 2.5 hasn't run yet** — `apply` succeeds either way, but OpenSearch access requires the access policy update first.
+
+> EC2 creation is optional (`manage_ec2_instance`, default `true`). Prod typically reuses an existing EC2 — set `manage_ec2_instance = false` and `existing_instance_id` in the venue's `terragrunt.hcl`. This step then only manages the SSM Run-As session document and publishes SSM parameters. See [`terraform/logstash/README.md`](logstash/README.md#using-an-existing-ec2-manage_ec2_instance--false) for manual Logstash install steps.
 
 ---
 
@@ -344,14 +281,11 @@ Checks S3 access, OpenSearch network reachability, OpenSearch SigV4 auth, and Lo
 
 ### Step 6 (optional): Grant Logstash access to CloudFront logs bucket
 
-Required only if ingesting CloudFront logs. Apply in the `pdc-cds-infra` repo:
+Required only if ingesting CloudFront logs. `enable_o11y_batch = true` is set in `cds-infra-deploy/venues/<venue>/pdc-cds-infra/cloudfront/pds-main/terragrunt.hcl` — it reads the EC2 role ARN from SSM automatically.
 
 ```bash
-cd pdc-cds-infra/terraform/cloudfront/pds-main/
-# Fill in tfvars/dev.tfvars: enable_o11y_batch = true (reads the EC2 role ARN from SSM at
-# /pds/o11y-cloudfront-batch/iam/ec2_role_arn automatically)
-task plan   VENUE=dev
-task deploy VENUE=dev
+task plan  VENUE=dev COMPONENT=pdc-cds-infra/cloudfront/pds-main
+task apply VENUE=dev COMPONENT=pdc-cds-infra/cloudfront/pds-main
 ```
 
 ---
@@ -411,7 +345,7 @@ Then test, commit, and redeploy via the standard config-update workflow above.
 
 Each component can be upgraded independently once the stack is fully deployed.
 
-**Logstash version** — update `logstash_version` in cds-infra-deploy tfvars and re-apply `logstash/` via Terragrunt. The EC2 is replaced (new instance with updated RPM). Run the smoke test after. See [logstash/README.md](logstash/README.md) for manual steps on an existing EC2.
+**Logstash version** — update `logstash_version` in `cds-infra-deploy/venues/<venue>/o11y-cloudfront-batch/logstash/terragrunt.hcl` and re-apply. The EC2 is replaced (new instance with updated RPM). Run the smoke test after. See [logstash/README.md](logstash/README.md) for manual steps on an existing EC2.
 
 **Logstash configuration** — edit files under `config/logstash/config/`, push to main, then SSM into the EC2 and re-run `scripts/logstash-deploy.sh`. No Terraform change needed.
 
@@ -424,15 +358,10 @@ Each component can be upgraded independently once the stack is fully deployed.
 ## Teardown
 
 ```bash
-# Primary (Terragrunt) — destroy in reverse order
-terragrunt destroy --working-dir $CDS_INFRA_DEPLOY_DIR/venues/dev/o11y-cloudfront-batch/logstash
-terragrunt destroy --working-dir $CDS_INFRA_DEPLOY_DIR/venues/dev/o11y-cloudfront-batch/iam/policies
-terragrunt destroy --working-dir $CDS_INFRA_DEPLOY_DIR/venues/dev/o11y-cloudfront-batch/s3
-
-# Fallback (Task)
-task logstash:destroy   VENUE=dev   # Logstash EC2 + launch template  🔐 admin
-task iam:destroy        VENUE=dev   # IAM policy + role attachment     🔐 admin
-task s3:destroy         VENUE=dev   # S3 bucket (does not delete objects)
+# Destroy in reverse order from cds-infra-deploy
+task destroy VENUE=dev COMPONENT=o11y-cloudfront-batch/logstash    # 🔑 Platform Engineer
+task destroy VENUE=dev COMPONENT=o11y-cloudfront-batch/iam/policies  # 🔐 Admin
+task destroy VENUE=dev COMPONENT=o11y-cloudfront-batch/s3           # 👤 Power User
 ```
 
 OpenSearch teardown is managed in [o11y-platform](https://github.com/NASA-PDS/o11y-platform).
@@ -447,6 +376,6 @@ OpenSearch teardown is managed in [o11y-platform](https://github.com/NASA-PDS/o1
   - `o11y-cloudfront-batch/logstash.tfstate` — Logstash EC2
   - `o11y-platform/opensearch.tfstate` — OpenSearch domain (managed in o11y-platform, own bucket/key)
 - **Variable naming** — `s3_bucket_prefix` is for the S3 bucket name only (may include CI/CD identifiers like `gh01dc`). `resource_prefix` is for all other resources and should not include CI/CD identifiers.
-- **VPC/SG values** are in tfvars. TODO: source from SSM under `/pds/cds-infra/vpc/` once published.
+- **VPC/SG values** are Terragrunt inputs in `cds-infra-deploy`. TODO: source from SSM under `/pds/cds-infra/vpc/` once published.
 - **Logstash sincedb** persists to `/var/lib/logstash/plugins/inputs/s3/` on the EC2 EBS volume (`delete_on_termination = false`) — S3 read position survives restarts and redeployments.
 - **OpenSearch** is managed in [o11y-platform](https://github.com/NASA-PDS/o11y-platform). The endpoint is published to SSM at `/pds/o11y-platform/opensearch/opensearch_endpoint` and consumed automatically at plan time.
