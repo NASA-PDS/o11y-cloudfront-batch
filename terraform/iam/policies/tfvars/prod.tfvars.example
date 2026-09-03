@@ -1,5 +1,6 @@
 # IAM-module prod values — copy to prod.tfvars and fill in values.
-# Shared values (aws_region, partition, ec2_role_name, etc.) are in common-prod.tfvars.
+# Shared values (aws_region, partition, etc.) are in common-prod.tfvars.
+# EC2 role name is read from SSM (published by terraform/iam/roles/).
 
 venue     = "prod"
 managedby = "<your-email>"

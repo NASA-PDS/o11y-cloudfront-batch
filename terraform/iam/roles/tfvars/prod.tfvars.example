@@ -1,0 +1,8 @@
+# IAM roles — prod venue
+# Copy to prod.tfvars and fill in values.
+# Shared values (aws_region, tenant, component, cicd) are in common-prod.tfvars.
+
+venue     = "pds-cds-prod"
+managedby = "<your-email>"
+
+permissions_boundary_arn = "<arn:aws:iam::<account-id>:policy/<boundary-policy-name>>"

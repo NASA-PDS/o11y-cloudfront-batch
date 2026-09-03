@@ -40,11 +40,6 @@ variable "resource_prefix" {
   type        = string
 }
 
-variable "ec2_role_name" {
-  description = "Existing PDS EC2 IAM role name (used as instance profile)"
-  type        = string
-}
-
 variable "manage_ec2_instance" {
   description = "Whether this module creates the Logstash EC2 (launch template + instance). Set to false to reuse an existing, externally-managed EC2 (e.g. production) — see existing_instance_id and terraform/logstash/README.md 'Using an existing EC2'."
   type        = bool

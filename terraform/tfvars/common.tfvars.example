@@ -10,4 +10,3 @@ managedby  = "<your-email>"
 
 partition       = "aws"
 resource_prefix = ""  # prefix for IAM policy names (e.g. pds-dev); no CI/CD identifiers
-ec2_role_name   = ""  # name of the EC2 IAM instance role
