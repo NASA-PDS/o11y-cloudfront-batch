@@ -1,5 +1,5 @@
 module "ec2_instance_role" {
-  source = "../../../../../pds-tf-modules/terraform/modules/iam/ec2-instance-role"
+  source = "../../../../../pds-tf-modules/terraform/modules/iam/roles/ec2"
 
   venue     = var.venue
   component = var.component
