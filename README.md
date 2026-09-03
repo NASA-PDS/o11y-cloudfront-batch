@@ -282,7 +282,6 @@ aws ssm start-session \
 
 # You land as root — switch in place before running anything below:
 sudo runuser -l pdsops
-cd /opt/o11y-cloudfront-batch
 ```
 
 (`su - pdsops` works the same way.) If your IAM identity does have the
@@ -301,11 +300,12 @@ tail -f /var/log/logstash/logstash-plain.log
 
 **Update config (pull latest from GitHub and restart, no sudo):**
 ```bash
-# On the EC2 — repo is already cloned and owned by pdsops; re-runs the idempotent deploy script
-bash scripts/logstash-deploy.sh
+# Piped directly from GitHub — no local checkout needed; the script
+# clones/updates its own working copy at REPO_DIR (default /opt/o11y-cloudfront-batch).
+bash <(curl -fsSL https://raw.githubusercontent.com/NASA-PDS/o11y-cloudfront-batch/main/scripts/logstash-deploy.sh)
 
 # To deploy from a non-main branch:
-REPO_BRANCH=<your-branch> bash scripts/logstash-deploy.sh
+REPO_BRANCH=<your-branch> bash <(curl -fsSL https://raw.githubusercontent.com/NASA-PDS/o11y-cloudfront-batch/main/scripts/logstash-deploy.sh)
 ```
 
 **Enable/update the daily egress report email:**
@@ -326,7 +326,7 @@ Then enable the cron job:
 ```bash
 # EGRESS_REPORT_RECIPIENTS is REQUIRED to enable the report — logstash-deploy.sh
 # skips installing the cron job silently if it's unset.
-EGRESS_REPORT_RECIPIENTS=<comma-separated-addresses> bash scripts/logstash-deploy.sh
+EGRESS_REPORT_RECIPIENTS=<comma-separated-addresses> bash <(curl -fsSL https://raw.githubusercontent.com/NASA-PDS/o11y-cloudfront-batch/main/scripts/logstash-deploy.sh)
 
 # Optional overrides (all have defaults — see scripts/logstash-deploy.sh header):
 #   SMTP_ENV_FILE             path to the local file above (default: /etc/logstash/smtp.env)
@@ -676,7 +676,7 @@ These hooks then will check for any future commits that might contain secrets. T
    - Check logs: `tail -n 50 /var/log/logstash/logstash-plain.log`
    - Check env file: `cat /etc/logstash/env`
    - Verify pipeline configs were generated: `ls /etc/logstash/pipelines/`
-   - Re-run deploy to pull latest config and restart (as the pdsops user, no sudo): `bash scripts/logstash-deploy.sh`
+   - Re-run deploy to pull latest config and restart (as the pdsops user, no sudo): `bash <(curl -fsSL https://raw.githubusercontent.com/NASA-PDS/o11y-cloudfront-batch/main/scripts/logstash-deploy.sh)`
    - If Logstash itself isn't installed yet, an SA needs to run `sudo bash scripts/logstash-bootstrap.sh` first
 
 2. **No data in OpenSearch**
