@@ -43,13 +43,18 @@ echo "=== o11y-cloudfront-batch Logstash bootstrap ==="
 # ----------------------------------------
 if [ ! -f /usr/share/logstash/bin/logstash ]; then
   echo "--- Installing Logstash ${LOGSTASH_VERSION} ---"
-  # Use python3.13 if available (RHEL 10+), fall back to python3 (RHEL 8/9)
+  # Use python3.13 if available (RHEL 10+), fall back to python3 (RHEL 8/9).
+  # Bare `python3` stays on the OS default (e.g. python3.9 on RHEL 9) even
+  # when python3.13 is installed alongside it, so pip must be invoked via
+  # the same versioned binary the matching pip package was installed for.
+  PYTHON_BIN="python3.13"
   PYTHON_PKGS="python3.13 python3.13-pip"
   if ! dnf info python3.13 &>/dev/null; then
+    PYTHON_BIN="python3"
     PYTHON_PKGS="python3 python3-pip"
   fi
   dnf install -y git $PYTHON_PKGS gettext awscli2 --quiet
-  python3 -m pip install --quiet --break-system-packages boto3 requests
+  "$PYTHON_BIN" -m pip install --quiet --break-system-packages boto3 requests
 
   rpm --import https://artifacts.elastic.co/GPG-KEY-elasticsearch
   cat > /etc/yum.repos.d/elastic.repo <<'REPO'
