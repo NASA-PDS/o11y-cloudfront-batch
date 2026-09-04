@@ -1,5 +1,5 @@
 module "s3_bucket" {
-  source      = "git@github.com:NASA-PDS/pds-tf-modules.git//terraform/modules/s3/bucket?ref=v0.1.0"
+  source      = "git@github.com:NASA-PDS/pdc-tf-modules.git//terraform/modules/s3/bucket?ref=v0.1.0"
   bucket_name = local.s3_bucket_name
   partition   = var.partition
   versioning  = "Suspended"

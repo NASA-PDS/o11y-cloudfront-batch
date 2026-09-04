@@ -6,7 +6,7 @@ Creates the EC2 instance role and instance profile for the o11y-cloudfront-batch
 
 ## Resources
 
-Calls the `iam/roles/ec2` module from [pds-tf-modules](https://github.com/NASA-PDS/pds-tf-modules), which creates:
+Calls the `iam/roles/ec2` module from [pdc-tf-modules](https://github.com/NASA-PDS/pdc-tf-modules), which creates:
 
 - `aws_iam_role` — EC2 instance role named `<venue>-o11y-cloudfront-batch-ec2-role`, trusted by `ec2.amazonaws.com`
 - `aws_iam_instance_profile` — instance profile with the same name

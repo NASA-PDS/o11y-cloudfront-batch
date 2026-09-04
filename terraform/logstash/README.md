@@ -14,7 +14,7 @@ below.
 
 ## Resources
 
-- `module.ec2` (from `pds-tf-modules//terraform/modules/ec2`) — EC2 launch template + instance, only created when `manage_ec2_instance = true`; userdata only installs the SSM agent — Logstash install and service setup are done manually post-boot (see [First-boot setup](#first-boot-setup)). No SSH; access via SSM Session Manager.
+- `module.ec2` (from `pdc-tf-modules//terraform/modules/ec2`) — EC2 launch template + instance, only created when `manage_ec2_instance = true`; userdata only installs the SSM agent — Logstash install and service setup are done manually post-boot (see [First-boot setup](#first-boot-setup)). No SSH; access via SSM Session Manager.
 - `aws_ssm_document.logstash_runas` — custom SSM Session document (Run-As `pdsops`) so operators never need sudo for day-2 ops; always created, works against any instance (created here or existing)
 - `aws_ssm_parameter.logstash_instance_id` — publishes the instance ID (created, or `existing_instance_id`) to `/pds/o11y-cloudfront-batch/ec2/logstash_instance_id`
 - `aws_ssm_parameter.logstash_runas_document` — publishes the Run-As document name to `/pds/o11y-cloudfront-batch/ssm/logstash_runas_document`
