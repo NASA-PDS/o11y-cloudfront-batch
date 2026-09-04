@@ -18,6 +18,12 @@
 #   export AWS_SECRET_ACCESS_KEY=...
 #   export AWS_DEFAULT_REGION=...
 #
+# Terraform state backend:
+#   Backend bucket names are not stored in this repo. Supply TFSTATE_BUCKET before running
+#   any *:init task, or use cds-infra-deploy Terragrunt (which reads it from venue.hcl):
+#     export TFSTATE_BUCKET=<tfstate-bucket-name>   # e.g. pds-dev-infra or pds-prod-infra
+#     task s3:init VENUE=dev
+#
 # tfvars:
 #   By default, tfvars are read from a local cds-infra-deploy checkout:
 #     export CDS_INFRA_DEPLOY_DIR=/path/to/cds-infra-deploy
@@ -62,7 +68,7 @@ tasks:
     # ------------------------------------------------------------------
 
     s3:init:
-        desc: "Initialize S3 module Terraform"
+        desc: "Initialize S3 module Terraform (set TFSTATE_BUCKET env var or use cds-infra-deploy Terragrunt)"
         deps: [aws]
         dir: s3
         requires:
@@ -70,7 +76,10 @@ tasks:
                 - name: VENUE
                   enum: [dev, test, prod]
         cmds:
-            - terraform init -no-color -reconfigure -backend-config=backend-{{.VENUE}}.hcl {{.CLI_ARGS}}
+            - |
+              BACKEND_ARGS=""
+              [ -n "$TFSTATE_BUCKET" ] && BACKEND_ARGS="-backend-config=bucket=$TFSTATE_BUCKET -backend-config=region=us-west-2 -backend-config=encrypt=true"
+              terraform init -no-color -reconfigure $BACKEND_ARGS {{.CLI_ARGS}}
 
     s3:validate:
         desc: "Validate S3 module Terraform files"
@@ -246,7 +255,7 @@ tasks:
     # ------------------------------------------------------------------
 
     logstash:init:
-        desc: "Initialize Logstash EC2 module Terraform (requires admin — iam:PassRole)"
+        desc: "Initialize Logstash EC2 module Terraform (requires admin — iam:PassRole; set TFSTATE_BUCKET env var or use cds-infra-deploy Terragrunt)"
         deps: [aws]
         dir: logstash
         requires:
@@ -254,7 +263,10 @@ tasks:
                 - name: VENUE
                   enum: [dev, test, prod]
         cmds:
-            - terraform init -no-color -reconfigure -backend-config=backend-{{.VENUE}}.hcl {{.CLI_ARGS}}
+            - |
+              BACKEND_ARGS=""
+              [ -n "$TFSTATE_BUCKET" ] && BACKEND_ARGS="-backend-config=bucket=$TFSTATE_BUCKET -backend-config=region=us-west-2 -backend-config=encrypt=true"
+              terraform init -no-color -reconfigure $BACKEND_ARGS {{.CLI_ARGS}}
 
     logstash:validate:
         desc: "Validate Logstash EC2 module Terraform files"
@@ -430,7 +442,7 @@ tasks:
     # ------------------------------------------------------------------
 
     iam:init:
-        desc: "Initialize IAM policies module Terraform"
+        desc: "Initialize IAM policies module Terraform (set TFSTATE_BUCKET env var or use cds-infra-deploy Terragrunt)"
         deps: [aws]
         dir: iam/policies
         requires:
@@ -438,7 +450,10 @@ tasks:
                 - name: VENUE
                   enum: [dev, test, prod]
         cmds:
-            - terraform init -no-color -reconfigure -backend-config=backend-{{.VENUE}}.hcl {{.CLI_ARGS}}
+            - |
+              BACKEND_ARGS=""
+              [ -n "$TFSTATE_BUCKET" ] && BACKEND_ARGS="-backend-config=bucket=$TFSTATE_BUCKET -backend-config=region=us-west-2 -backend-config=encrypt=true"
+              terraform init -no-color -reconfigure $BACKEND_ARGS {{.CLI_ARGS}}
 
     iam:validate:
         desc: "Validate IAM policies module Terraform files"
