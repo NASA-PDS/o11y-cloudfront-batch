@@ -86,7 +86,7 @@ sphinx-build -b html docs/source docs/build/html
 
 ## Architecture
 
-### S3 Sync Module (`src/pds/web_analytics/s3_sync.py`)
+### S3 Sync Module (`src/pds/o11y_batch/s3_sync.py`)
 
 The `S3Sync` class handles uploading log files from local directories to S3:
 
@@ -133,10 +133,10 @@ The Logstash configuration uses a **modular template system**:
 ### Package Structure
 
 This is a Python namespace package under the `pds` namespace:
-- Package name: `pds-web-analytics`
-- Namespace: `pds.web_analytics`
-- Source location: `src/pds/web_analytics/`
-- Version: Read from `src/pds/web_analytics/VERSION.txt`
+- Package name: `pds-o11y-cloudfront-batch`
+- Namespace: `pds.o11y_batch`
+- Source location: `src/pds/o11y_batch/`
+- Version: Read from `src/pds/o11y_batch/VERSION.txt`
 
 ## Important Implementation Details
 
@@ -208,28 +208,52 @@ aws ssm start-session --target <instance-id>
 ```
 
 **This lands as `root`.** Logstash runs as a `systemd --user` service under
-a shared `logstash` account, and day-2 operations (service control, logs,
+the `pdsops` key-user account, and day-2 operations (service control, logs,
 config redeploys via `scripts/logstash-deploy.sh`) are meant to run as that
 account with no sudo — but the session does not land there automatically.
 Switch in place immediately after connecting:
 
 ```bash
-sudo runuser -l logstash    # or: su - logstash
-cd /opt/web-analytics
+sudo runuser -l pdsops    # or: su - pdsops
+cd /opt/o11y-cloudfront-batch
 ```
 
 A custom SSM Run-As document (`aws_ssm_document.logstash_runas` in
 `terraform/logstash/main.tf`) can make `--document-name <doc>` land
-directly as `logstash`, but it requires an IAM grant
+directly as `pdsops`, but it requires an IAM grant
 (`ssm:StartSession` on the document ARN) that may not be provisioned —
 don't assume it works without confirming; the `runuser` switch above is
 the reliable fallback regardless of IAM state.
 
-Once you're `logstash`: `systemctl --user status logstash`,
+Once you're `pdsops`: `systemctl --user status logstash`,
 `tail -f /var/log/logstash/logstash-plain.log` for logs (`journalctl`
-needs adm/wheel group membership `logstash` doesn't have), `bash
+needs adm/wheel group membership `pdsops` doesn't have), `bash
 scripts/logstash-deploy.sh` to redeploy config. Full runbooks:
 `terraform/logstash/README.md` and the root `README.md` Quick Reference.
+
+### First-Boot Setup (new EC2)
+
+Userdata only installs the SSM agent — everything else is done manually
+after connecting. Two-phase process:
+
+**Phase 1 — SA (root required):** Install Logstash + configure the `pdsops` key-user.
+The bootstrap script is repo-independent and can be piped directly from GitHub:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/NASA-PDS/o11y-cloudfront-batch/main/scripts/logstash-bootstrap.sh \
+  | sudo LOGSTASH_VERSION=8.18.0 bash
+```
+
+**Phase 2 — Operator (no sudo):** Clone the repo, deploy config, start the service.
+`REPO_DIR` defaults to `/opt/o11y-cloudfront-batch`; override to `/usr/local/applications/o11y-cloudfront-batch` if required by local policy.
+
+```bash
+sudo runuser -l pdsops
+export REPO_DIR=/opt/o11y-cloudfront-batch
+export REPO_BRANCH=main
+export S3_CF_BUCKET_NAME=<cf-logs-bucket-or-empty-string>
+bash <(curl -fsSL https://raw.githubusercontent.com/NASA-PDS/o11y-cloudfront-batch/main/scripts/logstash-deploy.sh)
+```
 
 ## Dependencies
 
@@ -255,7 +279,7 @@ scripts/logstash-deploy.sh` to redeploy config. Full runbooks:
 
 ## Notes for Development
 
-- The `scripts/s3_log_sync.py` is a legacy script; the actual implementation is in `src/pds/web_analytics/s3_sync.py`
+- The `scripts/s3_log_sync.py` is a legacy script; the actual implementation is in `src/pds/o11y_batch/s3_sync.py`
 - Always run `./scripts/logstash_build_config.sh` after modifying Logstash configs to regenerate pipeline files
 - The system uses `envsubst` for variable substitution in both Python config loading and Logstash config generation
 - AWS profile is required for S3 operations - fails with helpful error if not provided

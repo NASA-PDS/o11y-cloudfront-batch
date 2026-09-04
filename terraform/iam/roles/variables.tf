@@ -4,20 +4,9 @@ variable "aws_region" {
   default     = "us-west-2"
 }
 
-variable "partition" {
-  type        = string
-  description = "AWS partition"
-  default     = "aws"
-}
-
-variable "logs_s3_bucket_name" {
-  type        = string
-  description = "Full name of the S3 logs bucket (e.g. pds-logs-dev)"
-}
-
 variable "venue" {
   type        = string
-  description = "Deployment venue (dev, test, prod)"
+  description = "Deployment venue (e.g. pds-cds-dev)"
 }
 
 variable "tenant" {
@@ -36,5 +25,6 @@ variable "cicd" {
 }
 
 variable "managedby" {
-  type = string
+  type        = string
+  description = "Email address of the team or person managing this resource"
 }

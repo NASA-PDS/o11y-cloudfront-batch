@@ -1,6 +1,7 @@
 # Logstash EC2 module — prod venue
 # Copy to prod.tfvars and fill in values.
-# common-prod.tfvars supplies: tenant, cicd, component, managedby, resource_prefix, ec2_role_name
+# common-prod.tfvars supplies: tenant, cicd, component, managedby, resource_prefix
+# Instance profile is created by terraform/iam/roles/ and read from SSM.
 
 venue = "prod"
 
@@ -15,6 +16,6 @@ s3_cf_bucket_name = "<cf-logs-bucket-name>"  # S3 bucket for CloudFront logs (EN
 
 # --- Only needed if manage_ec2_instance = true (this module creates the EC2) ---
 # vpc_id                  = ""                    # VPC ID for the Logstash EC2
-# ec2_security_group_name = "<mcp-ec2-sg-name>"   # Name of the MCP EC2 security group
-# mcp_ami_owner_id        = "<mcp-ami-owner-id>"  # AWS account ID that owns MCP Amazon Linux 2023 AMIs
+# ec2_security_group_name = "<ec2-sg-name>"   # Name of the EC2 security group
+# ami_id                  = "<ami-id>"             # AMI ID for the Logstash EC2 instance
 # logstash_instance_type  = "t3.large"

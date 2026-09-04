@@ -4,4 +4,6 @@
 venue     = "prod"
 managedby = "<your-email>"
 
-s3_bucket_prefix = ""  # S3 bucket name — no CI/CD identifiers in prod (e.g. pds-prod-logs)
+s3_bucket_prefix = ""  # e.g. pds-prod-gh01dc — the "gh01dc" is a legacy artifact of an early
+                        # GitHub CD/OIDC deploy design (since dropped); the live bucket keeps
+                        # this prefix since it was never renamed. See terraform/s3/README.md.

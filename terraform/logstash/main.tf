@@ -1,15 +1,12 @@
 # ---------------------------------------------------------------------------
 # Logstash EC2 instance
 # ---------------------------------------------------------------------------
-# AMI: Amazon Linux 2023 (owner 794625662971), consistent with
-# the pattern used in pds-tf-modules/terraform/modules/ec2/main.tf.
+# AMI: SA-managed private image (key-user pdsops pre-provisioned).
 # Logstash is installed directly via RPM (not Docker).
 #
-# Access: AWS Systems Manager (MCP-SSM-CloudWatch instance profile).
-# No SSH key or inbound security group rules needed.
-#
-# Reads s3_bucket_name from SSM (/pds/web-analytics/s3/bucket_name) so this
-# module can be applied independently of the S3 root module.
+# Access: AWS Systems Manager (no SSH key or inbound SG rules needed).
+# Instance role is managed separately in terraform/iam/roles/ and its
+# profile name is read from SSM at /pds/<component>/iam/roles/ec2-instance-profile-name.
 #
 # EC2 creation is optional (var.manage_ec2_instance, default true) — set to
 # false to point this module at an existing, externally-managed EC2 (e.g.
@@ -19,7 +16,7 @@
 # instance's ID. See terraform/logstash/README.md "Using an existing EC2"
 # for the manual setup steps (logstash-bootstrap.sh + logstash-deploy.sh).
 #
-# All data sources (SSM parameters, AMI/SG/subnet lookups) live in data.tf.
+# All data sources (SSM parameters, SG/subnet lookups) live in data.tf.
 
 locals {
   ec2_name = "pds-${var.component}"
@@ -33,70 +30,31 @@ locals {
   }
 }
 
-resource "aws_launch_template" "logstash" {
-  count = var.manage_ec2_instance ? 1 : 0
+module "ec2" {
+  source = "git@github.com:NASA-PDS/pdc-tf-modules.git//terraform/modules/ec2?ref=feature/update-ec2-module-oracle-linux-pdc"
+  count  = var.manage_ec2_instance ? 1 : 0
 
-  name_prefix   = "${local.ec2_name}-"
-  image_id      = data.aws_ami.mcp_amazon_linux[0].id
-  instance_type = var.logstash_instance_type
+  ami_id           = var.ami_id
+  instance_profile = data.aws_ssm_parameter.ec2_instance_profile_name.value
 
-  network_interfaces {
-    associate_public_ip_address = false
-    subnet_id                   = sort(data.aws_subnets.private[0].ids)[0]
-    security_groups             = [data.aws_security_group.mcp_ec2[0].id]
-  }
+  ec2_instance_configs = [{
+    instance_name    = local.ec2_name
+    instance_type    = var.logstash_instance_type
+    subnet_id        = sort(data.aws_subnets.private[0].ids)[0]
+    security_groups  = [data.aws_security_group.logstash_ec2[0].id]
+    root_volume_size = 30
+    root_volume_type = "gp3"
+    user_data = base64encode(templatefile("${path.module}/../templates/logstash-userdata.sh.tpl", {
+      aws_region = var.aws_region
+    }))
+  }]
 
-  iam_instance_profile {
-    name = var.ec2_role_name
-  }
-
-  block_device_mappings {
-    device_name = "/dev/xvda"
-    ebs {
-      volume_size           = 30
-      volume_type           = "gp3"
-      encrypted             = true
-      delete_on_termination = false
-    }
-  }
-
-  user_data = base64encode(templatefile("${path.module}/../templates/logstash-userdata.sh.tpl", {
-    logstash_version    = var.logstash_version
-    repo_branch         = var.repo_branch
-    aws_region          = var.aws_region
-    s3_bucket_name      = data.aws_ssm_parameter.s3_bucket_name.value
-    opensearch_endpoint = data.aws_ssm_parameter.opensearch_endpoint.value
-    index_prefix        = var.resource_prefix
-    s3_cf_bucket_name   = var.s3_cf_bucket_name
-  }))
-
-  tag_specifications {
-    resource_type = "instance"
-    tags          = local.logstash_tags
-  }
-
-  tag_specifications {
-    resource_type = "volume"
-    tags          = local.logstash_tags
-  }
-
-  tags = local.logstash_tags
-}
-
-resource "aws_instance" "logstash" {
-  count = var.manage_ec2_instance ? 1 : 0
-
-  launch_template {
-    id      = aws_launch_template.logstash[0].id
-    version = "$Latest"
-  }
-
-  tags = local.logstash_tags
-
-  lifecycle {
-    # Cloud automation stamps Audit, CreatedBy, CreationTime on launch — ignore to avoid stripping compliance tags.
-    # user_data is managed via launch template; ignore the value stored on the instance itself.
-    ignore_changes = [tags["Audit"], tags["CreatedBy"], tags["CreationTime"], user_data]
+  required_tags = {
+    tenant    = var.tenant
+    venue     = var.venue
+    component = var.component
+    managedby = var.managedby
+    cicd      = var.cicd
   }
 }
 
@@ -105,7 +63,7 @@ resource "aws_instance" "logstash" {
 # SSM Run-As session document
 # ---------------------------------------------------------------------------
 # Lets `aws ssm start-session --document-name <this>` land directly as the
-# `logstash` OS user instead of root/ssm-user, so operators never need sudo
+# `pdsops` key-user instead of root/ssm-user, so operators never need sudo
 # for logstash execution, logging, monitoring, or config (git) updates —
 # `scripts/logstash-deploy.sh` runs entirely under this account.
 #
@@ -117,13 +75,13 @@ resource "aws_instance" "logstash" {
 # addition to the instance ARN) is an IAM/SSO concern owned outside this
 # repo — this module only manages the EC2 instance role, not human roles.
 resource "aws_ssm_document" "logstash_runas" {
-  name            = "${local.ec2_name}-runas-logstash"
+  name            = "${local.ec2_name}-runas-pdsops"
   document_type   = "Session"
   document_format = "JSON"
 
   content = jsonencode({
     schemaVersion = "1.0"
-    description   = "SSM session landing directly as the logstash service user (no sudo)."
+    description   = "SSM session landing directly as the pdsops key-user (no sudo)."
     sessionType   = "Standard_Stream"
     inputs = {
       s3BucketName                = ""
@@ -134,16 +92,15 @@ resource "aws_ssm_document" "logstash_runas" {
       cloudWatchStreamingEnabled  = false
       kmsKeyId                    = ""
       runAsEnabled                = true
-      runAsDefaultUser            = "logstash"
+      runAsDefaultUser            = "pdsops"
       idleSessionTimeout          = "20"
       maxSessionDuration          = ""
       shellProfile = {
         windows = ""
-        linux   = "cd /opt/web-analytics && export XDG_RUNTIME_DIR=\"/run/user/$(id -u)\""
+        linux   = "cd /opt/o11y-cloudfront-batch && export XDG_RUNTIME_DIR=\"/run/user/$(id -u)\""
       }
     }
   })
 
   tags = local.logstash_tags
 }
-

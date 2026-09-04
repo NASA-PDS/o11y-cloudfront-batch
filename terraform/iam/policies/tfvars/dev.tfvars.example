@@ -1,5 +1,6 @@
 # IAM-module dev values — copy to dev.tfvars and fill in values.
-# Shared values (aws_region, partition, resource_prefix, ec2_role_name, etc.) are in common-dev.tfvars.
+# Shared values (aws_region, partition, etc.) are in common-dev.tfvars.
+# EC2 role name is read from SSM (published by terraform/iam/roles/).
 
 venue     = "dev"
 managedby = "<your-email>"

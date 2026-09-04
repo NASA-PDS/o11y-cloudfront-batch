@@ -1,4 +1,4 @@
-# PDS Web Analytics
+# PDS o11y-cloudfront-batch
 
 A comprehensive web analytics system for the Planetary Data System (PDS) that processes and analyzes web access logs from multiple PDS nodes using Logstash, OpenSearch, and AWS services.
 
@@ -53,11 +53,11 @@ flowchart LR
 
     S3["pds-logs\nS3 bucket"]
 
-    subgraph wa["web-analytics"]
+    subgraph wa["o11y-cloudfront-batch"]
         LS["Logstash EC2\n(parse + enrich)"]
     end
 
-    subgraph obs["pdc-observability"]
+    subgraph obs["o11y-platform"]
         OS["OpenSearch"]
     end
 
@@ -69,7 +69,7 @@ flowchart LR
     OS --> DASH
 ```
 
-PDS nodes upload access logs to a shared `pds-logs` S3 bucket using Data Upload Manager. Logstash polls S3, parses logs into ECS v8 format, and writes to OpenSearch. OpenSearch is a shared platform managed in [pdc-observability](https://github.com/NASA-PDS/pdc-observability) — both this pipeline and [cloudfront-realtime-monitor](https://github.com/NASA-PDS/cloudfront-realtime-monitor) write to it. Analysts query via OpenSearch Dashboards.
+PDS nodes upload access logs to a shared `pds-logs` S3 bucket using Data Upload Manager. Logstash polls S3, parses logs into ECS v8 format, and writes to OpenSearch. OpenSearch is a shared platform managed in [o11y-platform](https://github.com/NASA-PDS/o11y-platform) — both this pipeline and [o11y-cloudfront-streaming](https://github.com/NASA-PDS/o11y-cloudfront-streaming) write to it. Analysts query via OpenSearch Dashboards.
 
 ## Prerequisites
 
@@ -96,11 +96,11 @@ sudo dnf install gettext
 
 ### 1. Clone the Repository
 ```bash
-git clone https://github.com/NASA-PDS/web-analytics.git
-cd web-analytics
+git clone https://github.com/NASA-PDS/o11y-cloudfront-batch.git
+cd o11y-cloudfront-batch
 
-# Create WEB_ANALYTICS_HOME environment variable
-echo 'export WEB_ANALYTICS_HOME="$(pwd)"' >> ~/.bashrc
+# Create O11Y_BATCH_HOME environment variable
+echo 'export O11Y_BATCH_HOME="$(pwd)"' >> ~/.bashrc
 source ~/.bashrc
 ```
 
@@ -128,7 +128,7 @@ cp .env.example .env
 S3_BUCKET_NAME=your-pds-logs-bucket
 S3_CF_BUCKET_NAME=               # CloudFront logs bucket (EN only); leave empty to skip
 OPENSEARCH_URL=https://your-opensearch-domain.us-west-2.es.amazonaws.com
-INDEX_PREFIX=pds-web-analytics
+INDEX_PREFIX=pds-weblogs
 AWS_REGION=us-west-2
 ```
 
@@ -155,7 +155,7 @@ On the EC2, `logstash-deploy.sh` applies this automatically via the AWS CLI. To 
 
 ```
 GET _cat/templates
-PUT _index_template/pds-web-analytics
+PUT _index_template/pds-o11y-cloudfront-batch
 # paste config/opensearch/ecs-8.17-custom-template.json
 GET _cat/templates
 ```
@@ -165,7 +165,7 @@ GET _cat/templates
 The PDS Web Analytics system is organized as a Python package:
 
 ```
-src/pds/web_analytics/
+src/pds/o11y_batch/
 ├── __init__.py          # Package initialization
 ├── s3_sync.py          # S3Sync class implementation (now uses boto3)
 └── VERSION.txt         # Package version
@@ -176,7 +176,7 @@ src/pds/web_analytics/
 After setting up the environment, install the package in development mode:
 
 ```bash
-cd $WEB_ANALYTICS_HOME
+cd $O11Y_BATCH_HOME
 
 # Install in development mode
 pip install -e .
@@ -238,7 +238,7 @@ The configuration supports environment variable substitution using `${VARIABLE_N
 Sync logs from PDS reporting servers to S3:
 
 ```bash
-cd $WEB_ANALYTICS_HOME
+cd $O11Y_BATCH_HOME
 
 # Using the package command (recommended)
 s3-log-sync -c config/config.yaml -d /var/log/pds
@@ -254,22 +254,22 @@ s3-log-sync -c config/config.yaml -d /var/log/pds --aws-profile pds-analytics
 s3-log-sync -c config/config.yaml -d /var/log/pds --no-gzip
 
 # Set up as a cron job (example: every hour)
-0 * * * * cd /path/to/web-analytics && s3-log-sync -c config/config.yaml -d /var/log/pds
+0 * * * * cd /path/to/o11y-cloudfront-batch && s3-log-sync -c config/config.yaml -d /var/log/pds
 ```
 
 **Note**: The `--aws-profile` argument defaults to the `AWS_PROFILE` environment variable if it's set. If neither is provided, the command will fail with a helpful error message. All S3 uploads are performed using boto3 (not the AWS CLI).
 
 ### Logstash Processing
 
-In production, Logstash runs as a `systemd --user` service under a shared `logstash`
-OS account on an Amazon Linux 2023 EC2. Access is via AWS Systems Manager
+In production, Logstash runs as a `systemd --user` service under the shared `pdsops`
+key-user account on an SA-managed EC2. Access is via AWS Systems Manager
 (no SSH keys, no inbound rules) — day-2 operations (service control, logs,
-config updates) never require sudo once you're the `logstash` user.
+config updates) never require sudo once you're the `pdsops` user.
 Full operational runbooks are in [`terraform/README.md`](terraform/README.md).
 
-#### Quick reference (from an SSM session on the EC2, as the logstash user)
+#### Quick reference (from an SSM session on the EC2, as the pdsops user)
 
-**SSM into the EC2, then switch to `logstash`.** In practice, `aws ssm
+**SSM into the EC2, then switch to `pdsops`.** In practice, `aws ssm
 start-session` lands you as `root` regardless of `--document-name`/Run-As
 (that depends on an IAM grant — `ssm:StartSession` on the Run-As document's
 ARN — that may not be in place). The reliable path is always:
@@ -277,19 +277,18 @@ ARN — that may not be in place). The reliable path is always:
 ```bash
 aws ssm start-session \
   --target $(aws ssm get-parameter \
-    --name /pds/web-analytics/ec2/logstash_instance_id \
+    --name /pds/o11y-cloudfront-batch/ec2/logstash_instance_id \
     --query Parameter.Value --output text)
 
 # You land as root — switch in place before running anything below:
-sudo runuser -l logstash
-cd /opt/web-analytics
+sudo runuser -l pdsops
 ```
 
-(`su - logstash` works the same way.) If your IAM identity does have the
+(`su - pdsops` works the same way.) If your IAM identity does have the
 Run-As grant, you can skip the switch by adding `--document-name $(aws ssm
-get-parameter --name /pds/web-analytics/ssm/logstash_runas_document --query
+get-parameter --name /pds/o11y-cloudfront-batch/ssm/logstash_runas_document --query
 Parameter.Value --output text)` to `start-session` — but don't rely on it
-without confirming it actually lands you as `logstash` first.
+without confirming it actually lands you as `pdsops` first.
 
 **Service control (no sudo):**
 ```bash
@@ -301,11 +300,12 @@ tail -f /var/log/logstash/logstash-plain.log
 
 **Update config (pull latest from GitHub and restart, no sudo):**
 ```bash
-# On the EC2 — repo is already cloned and owned by logstash; re-runs the idempotent deploy script
-bash scripts/logstash-deploy.sh
+# Piped directly from GitHub — no local checkout needed; the script
+# clones/updates its own working copy at REPO_DIR (default /opt/o11y-cloudfront-batch).
+bash <(curl -fsSL https://raw.githubusercontent.com/NASA-PDS/o11y-cloudfront-batch/main/scripts/logstash-deploy.sh)
 
 # To deploy from a non-main branch:
-REPO_BRANCH=<your-branch> bash scripts/logstash-deploy.sh
+REPO_BRANCH=<your-branch> bash <(curl -fsSL https://raw.githubusercontent.com/NASA-PDS/o11y-cloudfront-batch/main/scripts/logstash-deploy.sh)
 ```
 
 **Enable/update the daily egress report email:**
@@ -314,7 +314,7 @@ SMTP credentials are read from a local file on the EC2 — no AWS permissions
 beyond reading a file already on disk. Create it once (as root or via sudo),
 before or after the deploy step below:
 ```bash
-sudo install -m 600 -o logstash -g logstash /dev/null /etc/logstash/smtp.env
+sudo install -m 600 -o pdsops -g pdsops /dev/null /etc/logstash/smtp.env
 sudo tee /etc/logstash/smtp.env > /dev/null <<'EOF'
 username=<smtp-username>
 password=<smtp-password>
@@ -326,7 +326,7 @@ Then enable the cron job:
 ```bash
 # EGRESS_REPORT_RECIPIENTS is REQUIRED to enable the report — logstash-deploy.sh
 # skips installing the cron job silently if it's unset.
-EGRESS_REPORT_RECIPIENTS=<comma-separated-addresses> bash scripts/logstash-deploy.sh
+EGRESS_REPORT_RECIPIENTS=<comma-separated-addresses> bash <(curl -fsSL https://raw.githubusercontent.com/NASA-PDS/o11y-cloudfront-batch/main/scripts/logstash-deploy.sh)
 
 # Optional overrides (all have defaults — see scripts/logstash-deploy.sh header):
 #   SMTP_ENV_FILE             path to the local file above (default: /etc/logstash/smtp.env)
@@ -358,7 +358,7 @@ systemctl --user start logstash
 
 **Smoke test:**
 ```bash
-bash /opt/web-analytics/scripts/smoke-test.sh
+bash /opt/o11y-cloudfront-batch/scripts/smoke-test.sh
 ```
 
 > An admin occasionally needs `sudo bash scripts/logstash-bootstrap.sh` — but
@@ -506,7 +506,7 @@ If a count is wrong, inspect the JSON files in `./output/` to understand which e
 
 ### Monitoring
 
-**On the EC2 (via SSM, as the logstash user — no sudo):**
+**On the EC2 (via SSM, as the pdsops user — no sudo):**
 
 ```bash
 # Logstash systemd --user service status
@@ -544,7 +544,7 @@ stays flat usually means it's stuck (e.g. blocked on the OpenSearch output).
 
 ```bash
 # From the EC2 — uses instance role credentials automatically
-bash /opt/web-analytics/scripts/smoke-test.sh
+bash /opt/o11y-cloudfront-batch/scripts/smoke-test.sh
 ```
 
 ## Data Processing Overview
@@ -615,7 +615,7 @@ The system processes logs from the following PDS nodes:
 ### Project Structure
 
 ```
-web-analytics/
+o11y-cloudfront-batch/
 ├── config/                    # Configuration files
 │   ├── logstash/             # Logstash configurations
 │   └── config_example.yaml   # S3 sync configuration template
@@ -676,11 +676,11 @@ These hooks then will check for any future commits that might contain secrets. T
    - Check logs: `tail -n 50 /var/log/logstash/logstash-plain.log`
    - Check env file: `cat /etc/logstash/env`
    - Verify pipeline configs were generated: `ls /etc/logstash/pipelines/`
-   - Re-run deploy to pull latest config and restart (as the logstash user, no sudo): `bash scripts/logstash-deploy.sh`
-   - If Logstash itself isn't installed yet, an admin needs to run `sudo bash scripts/logstash-bootstrap.sh` first
+   - Re-run deploy to pull latest config and restart (as the pdsops user, no sudo): `bash <(curl -fsSL https://raw.githubusercontent.com/NASA-PDS/o11y-cloudfront-batch/main/scripts/logstash-deploy.sh)`
+   - If Logstash itself isn't installed yet, an SA needs to run `sudo bash scripts/logstash-bootstrap.sh` first
 
 2. **No data in OpenSearch**
-   - Run smoke test: `bash /opt/web-analytics/scripts/smoke-test.sh`
+   - Run smoke test: `bash /opt/o11y-cloudfront-batch/scripts/smoke-test.sh`
    - Check S3 sincedb files: `ls -la /var/lib/logstash/plugins/inputs/s3/`
    - Check Logstash logs for S3 read errors: `tail -n 100 /var/log/logstash/logstash-plain.log`
 

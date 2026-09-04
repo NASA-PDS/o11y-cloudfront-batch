@@ -40,11 +40,6 @@ variable "resource_prefix" {
   type        = string
 }
 
-variable "ec2_role_name" {
-  description = "Existing PDS EC2 IAM role name (used as instance profile)"
-  type        = string
-}
-
 variable "manage_ec2_instance" {
   description = "Whether this module creates the Logstash EC2 (launch template + instance). Set to false to reuse an existing, externally-managed EC2 (e.g. production) — see existing_instance_id and terraform/logstash/README.md 'Using an existing EC2'."
   type        = bool
@@ -52,7 +47,7 @@ variable "manage_ec2_instance" {
 }
 
 variable "existing_instance_id" {
-  description = "Instance ID of an existing EC2 to publish as /pds/web-analytics/ec2/logstash_instance_id. Required when manage_ec2_instance = false; ignored otherwise."
+  description = "Instance ID of an existing EC2 to publish as /pds/o11y-cloudfront-batch/ec2/logstash_instance_id. Required when manage_ec2_instance = false; ignored otherwise."
   type        = string
   default     = ""
 }
@@ -88,14 +83,14 @@ variable "s3_cf_bucket_name" {
   default     = ""
 }
 
-variable "mcp_ami_owner_id" {
-  description = "AWS account ID that owns the Amazon Linux 2023 AMIs used for the Logstash instance. Required when manage_ec2_instance = true."
+variable "ami_id" {
+  description = "AMI ID for the Logstash EC2 instance. Required when manage_ec2_instance = true."
   type        = string
   default     = ""
 }
 
 variable "repo_branch" {
-  description = "Branch of the web-analytics repo to clone at EC2 first boot."
+  description = "Branch of the o11y-cloudfront-batch repo to clone at EC2 first boot."
   type        = string
   default     = "main"
 }

@@ -1,5 +1,5 @@
 module "s3_bucket" {
-  source      = "git@github.com:NASA-PDS/pds-tf-modules.git//terraform/modules/s3/bucket?ref=v0.1.0"
+  source      = "git@github.com:NASA-PDS/pdc-tf-modules.git//terraform/modules/s3/bucket?ref=v0.1.0"
   bucket_name = local.s3_bucket_name
   partition   = var.partition
   versioning  = "Suspended"
@@ -14,20 +14,6 @@ module "s3_bucket" {
   bucket_policy = jsonencode({
     Version = "2012-10-17",
     Statement = [
-      {
-        Sid    = "AllowEC2Role",
-        Effect = "Allow",
-        Principal = {
-          AWS = [
-            "arn:${var.partition}:iam::${data.aws_caller_identity.current.account_id}:role/${var.ec2_role_name}"
-          ]
-        },
-        Action = ["s3:GetBucketLocation", "s3:ListBucket", "s3:GetObject", "s3:GetObjectVersion"],
-        Resource = [
-          "arn:${var.partition}:s3:::${local.s3_bucket_name}",
-          "arn:${var.partition}:s3:::${local.s3_bucket_name}/*"
-        ]
-      },
       {
         Sid       = "AllowSSLRequestsOnly",
         Effect    = "Deny",

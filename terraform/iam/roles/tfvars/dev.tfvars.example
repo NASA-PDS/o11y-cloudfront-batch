@@ -1,0 +1,6 @@
+# IAM roles — dev venue
+# Copy to dev.tfvars and fill in values.
+# Shared values (aws_region, tenant, component, cicd) are in common-dev.tfvars.
+
+venue     = "pds-cds-dev"
+managedby = "<your-email>"

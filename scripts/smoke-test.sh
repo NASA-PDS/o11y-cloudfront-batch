@@ -1,9 +1,9 @@
 #!/bin/bash
 # smoke-test.sh — Verify S3, OpenSearch, and Logstash are all reachable and auth works.
-# Run from the Logstash EC2 after deployment, as the logstash user (no sudo).
+# Run from the Logstash EC2 after deployment, as the pdsops user (no sudo).
 #
 # Usage:
-#   bash /opt/web-analytics/scripts/smoke-test.sh
+#   bash /opt/o11y-cloudfront-batch/scripts/smoke-test.sh
 
 set -euo pipefail
 
@@ -27,8 +27,8 @@ def check(label, fn):
         print(f'  FAIL  {label}: {e}')
         ok = False
 
-S3_BUCKET  = ssm.get_parameter(Name='/pds/web-analytics/s3/bucket_name')['Parameter']['Value']
-ENDPOINT   = ssm.get_parameter(Name='/pds/observability/opensearch/opensearch_endpoint')['Parameter']['Value']
+S3_BUCKET  = ssm.get_parameter(Name='/pds/o11y-cloudfront-batch/s3/bucket_name')['Parameter']['Value']
+ENDPOINT   = ssm.get_parameter(Name='/pds/o11y-platform/opensearch/opensearch_endpoint')['Parameter']['Value']
 
 # 1. S3 access
 check('S3 bucket accessible',
