@@ -1,9 +1,9 @@
 """Unit tests for the EgressReporter class."""
-
 import os
 import tempfile
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
+from unittest.mock import patch
 
 from pds.o11y_batch.egress_report import EgressReporter
 

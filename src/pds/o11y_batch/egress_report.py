@@ -1,13 +1,16 @@
 """Daily egress (download volume) report for PDS web analytics."""
-
 import argparse
 import json
 import logging
 import os
 import smtplib
-from datetime import datetime, timezone
+from datetime import datetime
+from datetime import timezone
 from email.mime.text import MIMEText
-from typing import Any, Dict, List, Optional
+from typing import Any
+from typing import Dict
+from typing import List
+from typing import Optional
 
 import boto3  # type: ignore
 import requests
