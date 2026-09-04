@@ -9,4 +9,3 @@ resource "aws_iam_policy" "ec2_o11y_cloudfront_batch_access" {
   policy      = data.aws_iam_policy_document.ec2_o11y_cloudfront_batch_access.json
   tags        = var.common_tags
 }
-

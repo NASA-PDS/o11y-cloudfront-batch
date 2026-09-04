@@ -28,4 +28,3 @@ variable "managedby" {
   type        = string
   description = "Email address of the team or person managing this resource"
 }
-
