@@ -78,7 +78,7 @@ tasks:
         cmds:
             - |
               BACKEND_ARGS=""
-              [ -n "$TFSTATE_BUCKET" ] && BACKEND_ARGS="-backend-config=bucket=$TFSTATE_BUCKET -backend-config=region=us-west-2 -backend-config=encrypt=true"
+              [ -n "$TFSTATE_BUCKET" ] && BACKEND_ARGS="-backend-config=bucket=$TFSTATE_BUCKET -backend-config=region=us-west-2 -backend-config=encrypt=true -backend-config=use_lockfile=true"
               terraform init -no-color -reconfigure $BACKEND_ARGS {{.CLI_ARGS}}
 
     s3:validate:
@@ -265,7 +265,7 @@ tasks:
         cmds:
             - |
               BACKEND_ARGS=""
-              [ -n "$TFSTATE_BUCKET" ] && BACKEND_ARGS="-backend-config=bucket=$TFSTATE_BUCKET -backend-config=region=us-west-2 -backend-config=encrypt=true"
+              [ -n "$TFSTATE_BUCKET" ] && BACKEND_ARGS="-backend-config=bucket=$TFSTATE_BUCKET -backend-config=region=us-west-2 -backend-config=encrypt=true -backend-config=use_lockfile=true"
               terraform init -no-color -reconfigure $BACKEND_ARGS {{.CLI_ARGS}}
 
     logstash:validate:
@@ -452,7 +452,7 @@ tasks:
         cmds:
             - |
               BACKEND_ARGS=""
-              [ -n "$TFSTATE_BUCKET" ] && BACKEND_ARGS="-backend-config=bucket=$TFSTATE_BUCKET -backend-config=region=us-west-2 -backend-config=encrypt=true"
+              [ -n "$TFSTATE_BUCKET" ] && BACKEND_ARGS="-backend-config=bucket=$TFSTATE_BUCKET -backend-config=region=us-west-2 -backend-config=encrypt=true -backend-config=use_lockfile=true"
               terraform init -no-color -reconfigure $BACKEND_ARGS {{.CLI_ARGS}}
 
     iam:validate:

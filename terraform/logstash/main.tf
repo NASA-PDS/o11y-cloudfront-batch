@@ -6,7 +6,7 @@
 #
 # Access: AWS Systems Manager (no SSH key or inbound SG rules needed).
 # Instance role is managed separately in terraform/iam/roles/ and its
-# profile name is read from SSM at /pds/<component>/iam/roles/ec2-instance-profile-name.
+# profile name is read from SSM at /pds/<component>/iam/roles/ec2/instance-profile-name.
 #
 # EC2 creation is optional (var.manage_ec2_instance, default true) — set to
 # false to point this module at an existing, externally-managed EC2 (e.g.
