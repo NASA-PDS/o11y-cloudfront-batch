@@ -28,3 +28,8 @@ variable "managedby" {
   type        = string
   description = "Email address of the team or person managing this resource"
 }
+
+variable "ec2users_dynamodb_table_arn" {
+  type        = string
+  description = "ARN of the DynamoDB ec2users table to grant Get*/Query access on the EC2 instance role."
+}
