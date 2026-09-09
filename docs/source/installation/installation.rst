@@ -98,11 +98,11 @@ Installation Steps
 
 .. code-block:: bash
 
-    git clone https://github.com/NASA-PDS/web-analytics.git
-    cd web-analytics
+    git clone https://github.com/NASA-PDS/o11y-cloudfront-batch.git
+    cd o11y-cloudfront-batch
 
-    # Create WEB_ANALYTICS_HOME environment variable
-    echo 'export WEB_ANALYTICS_HOME="$(pwd)"' >> ~/.bashrc
+    # Create O11Y_BATCH_HOME environment variable
+    echo 'export O11Y_BATCH_HOME="$(pwd)"' >> ~/.bashrc
     source ~/.bashrc
 
 2. Set Up Python Environment
@@ -156,7 +156,7 @@ The PDS Web Analytics system is organized as a Python package:
 
 .. code-block:: text
 
-    src/pds/web_analytics/
+    src/pds/o11y_batch/
     ├── __init__.py          # Package initialization
     ├── s3_sync.py          # S3Sync class implementation (now uses boto3)
     └── VERSION.txt         # Package version

@@ -164,7 +164,7 @@ Environment Variable Issues
 
    .. code-block:: bash
 
-       source $WEB_ANALYTICS_HOME/.env
+       source $O11Y_BATCH_HOME/.env
 
 Log Locations
 -------------
@@ -262,7 +262,7 @@ Getting Additional Help
 
 If you continue to experience issues:
 
-1. Check the `GitHub Issues <https://github.com/NASA-PDS/web-analytics/issues>`_ for similar problems
+1. Check the `GitHub Issues <https://github.com/NASA-PDS/o11y-cloudfront-batch/issues>`_ for similar problems
 2. Review the detailed technical documentation in the README
 3. Contact the PDS Help Desk (see :doc:`contact`)
 4. For security issues, see ``SECURITY.md`` in the repository

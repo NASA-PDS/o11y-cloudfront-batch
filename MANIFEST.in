@@ -1,6 +1,6 @@
 graft src
 include versioneer.py
-include src/pds/web_analytics/VERSION.txt
+include src/pds/o11y_batch/VERSION.txt
 global-exclude *.py[cod]
 
 # Include documentation

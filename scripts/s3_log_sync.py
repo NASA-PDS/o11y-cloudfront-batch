@@ -7,7 +7,7 @@ For new installations, use the 's3-log-sync' command directly.
 """
 
 import sys
-from pds.web_analytics.s3_sync import main
+from pds.o11y_batch.s3_sync import main
 
 if __name__ == "__main__":
     main()

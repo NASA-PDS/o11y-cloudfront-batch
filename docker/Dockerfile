@@ -7,8 +7,8 @@
 #   test  — Adds Python to run the integration test suite locally
 #
 # Production usage (ECS injects env vars via task definition):
-#   docker build --target prod -t pds-web-analytics .
-#   docker run --env-file .env pds-web-analytics
+#   docker build --target prod -t pds-o11y-cloudfront-batch .
+#   docker run --env-file .env pds-o11y-cloudfront-batch
 #
 # Test usage:
 #   docker compose run test

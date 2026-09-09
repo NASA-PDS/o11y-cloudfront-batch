@@ -5,8 +5,7 @@ import unittest
 from unittest.mock import MagicMock
 from unittest.mock import patch
 
-from pds.web_analytics.egress_report import EgressReporter
-
+from pds.o11y_batch.egress_report import EgressReporter
 
 SAMPLE_RESPONSE = {
     "aggregations": {
@@ -56,9 +55,9 @@ class TestEgressReporter(unittest.TestCase):
         self.assertEqual(query["aggs"]["top_domains"]["terms"]["size"], 20)
         self.assertEqual(query["aggs"]["top_users"]["terms"]["field"], "source.domain")
 
-    @patch("pds.web_analytics.egress_report.requests.post")
-    @patch("pds.web_analytics.egress_report.SigV4Auth")
-    @patch("pds.web_analytics.egress_report.boto3.Session")
+    @patch("pds.o11y_batch.egress_report.requests.post")
+    @patch("pds.o11y_batch.egress_report.SigV4Auth")
+    @patch("pds.o11y_batch.egress_report.boto3.Session")
     def test_query_egress_calls_signed_post(self, mock_session, mock_sigv4, mock_post):
         """query_egress should POST the query body to the domain's _search endpoint and return parsed JSON."""
         mock_session.return_value.get_credentials.return_value = MagicMock()
@@ -84,7 +83,7 @@ class TestEgressReporter(unittest.TestCase):
         self.assertIn("example.com", html)
         self.assertIn("user.example.com", html)
 
-    @patch("pds.web_analytics.egress_report.boto3.client")
+    @patch("pds.o11y_batch.egress_report.boto3.client")
     def test_fetch_smtp_config_from_ssm_success(self, mock_boto_client):
         """SSM parameters under the configured path should be mapped to their unique name suffix."""
         mock_ssm = MagicMock()
@@ -104,7 +103,7 @@ class TestEgressReporter(unittest.TestCase):
         self.assertEqual(config["username"], "smtp-user")
         self.assertEqual(config["server"], "email-smtp.us-west-2.amazonaws.com:587")
 
-    @patch("pds.web_analytics.egress_report.boto3.client")
+    @patch("pds.o11y_batch.egress_report.boto3.client")
     def test_fetch_smtp_config_from_ssm_missing_field_raises(self, mock_boto_client):
         """Missing an expected SMTP field should raise RuntimeError rather than fail later with a KeyError."""
         mock_ssm = MagicMock()
@@ -177,7 +176,7 @@ class TestEgressReporter(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             reporter._resolve_smtp_config()
 
-    @patch("pds.web_analytics.egress_report.smtplib.SMTP")
+    @patch("pds.o11y_batch.egress_report.smtplib.SMTP")
     @patch.object(EgressReporter, "_resolve_smtp_config")
     def test_send_email_uses_smtp_with_starttls_and_login(self, mock_resolve_config, mock_smtp_cls):
         """send_email should STARTTLS, log in, and send to all recipients via the resolved SMTP config."""
@@ -209,9 +208,7 @@ class TestEgressReporter(unittest.TestCase):
         with tempfile.NamedTemporaryFile("r", delete=False, suffix=".html") as f:
             path = f.name
         try:
-            reporter = make_reporter(
-                smtp_env_file=None, smtp_config_ssm_path=None, dry_run=True, output_file=path
-            )
+            reporter = make_reporter(smtp_env_file=None, smtp_config_ssm_path=None, dry_run=True, output_file=path)
             reporter.run()
 
             mock_send_email.assert_not_called()

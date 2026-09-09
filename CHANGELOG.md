@@ -1,62 +1,62 @@
 # Changelog
 
-## [«unknown»](https://github.com/NASA-PDS/web-analytics/tree/«unknown») (2026-08-13)
+## [«unknown»](https://github.com/NASA-PDS/o11y-cloudfront-batch/tree/«unknown») (2026-08-13)
 
-[Full Changelog](https://github.com/NASA-PDS/web-analytics/compare/v1.0.1...«unknown»)
+[Full Changelog](https://github.com/NASA-PDS/o11y-cloudfront-batch/compare/v1.0.1...«unknown»)
 
 **Requirements:**
 
-- As a CloudOps Engineer, I want to ingest and parse CloudFront access logs in legacy W3C tab-delimited format [\#71](https://github.com/NASA-PDS/web-analytics/issues/71)
+- As a CloudOps Engineer, I want to ingest and parse CloudFront access logs in legacy W3C tab-delimited format [\#71](https://github.com/NASA-PDS/o11y-cloudfront-batch/issues/71)
 
 **Defects:**
 
-- Terraform mistakenly expires logs after 30 days [\#66](https://github.com/NASA-PDS/web-analytics/issues/66) [[s.high](https://github.com/NASA-PDS/web-analytics/labels/s.high)]
+- Terraform mistakenly expires logs after 30 days [\#66](https://github.com/NASA-PDS/o11y-cloudfront-batch/issues/66) [[s.high](https://github.com/NASA-PDS/o11y-cloudfront-batch/labels/s.high)]
 
 **Other closed issues:**
 
-- Test uploading web logs to S3 logs bucket via DUM [\#72](https://github.com/NASA-PDS/web-analytics/issues/72)
+- Test uploading web logs to S3 logs bucket via DUM [\#72](https://github.com/NASA-PDS/o11y-cloudfront-batch/issues/72)
 
-## [v1.0.1](https://github.com/NASA-PDS/web-analytics/tree/v1.0.1) (2025-10-08)
+## [v1.0.1](https://github.com/NASA-PDS/o11y-cloudfront-batch/tree/v1.0.1) (2025-10-08)
 
-[Full Changelog](https://github.com/NASA-PDS/web-analytics/compare/v1.0.0...v1.0.1)
+[Full Changelog](https://github.com/NASA-PDS/o11y-cloudfront-batch/compare/v1.0.0...v1.0.1)
 
-## [v1.0.0](https://github.com/NASA-PDS/web-analytics/tree/v1.0.0) (2025-10-08)
+## [v1.0.0](https://github.com/NASA-PDS/o11y-cloudfront-batch/tree/v1.0.0) (2025-10-08)
 
-[Full Changelog](https://github.com/NASA-PDS/web-analytics/compare/d6977fda23e31e92e8229725ad26c02e0e665157...v1.0.0)
+[Full Changelog](https://github.com/NASA-PDS/o11y-cloudfront-batch/compare/d6977fda23e31e92e8229725ad26c02e0e665157...v1.0.0)
 
 **Requirements:**
 
-- As a user, I want a mission-specific dashboard showing instrument and product type download metrics [\#24](https://github.com/NASA-PDS/web-analytics/issues/24)
-- As a user, I want year over year metrics for total egress [\#21](https://github.com/NASA-PDS/web-analytics/issues/21)
-- Dashboard: EN Search Query analytics - queries over time period [\#9](https://github.com/NASA-PDS/web-analytics/issues/9)
-- As a data scientist, I want to update and refine web metrics dashboards, to provide improved views on PDS node usage patterns over time [\#4](https://github.com/NASA-PDS/web-analytics/issues/4)
-- As a data engineer, I want to sync logs from PDS website in an automated fashion [\#2](https://github.com/NASA-PDS/web-analytics/issues/2)
-- As a Node Manager, I want to know the frequency of access of each archive artifact [\#22](https://github.com/NASA-PDS/web-analytics/issues/22)
+- As a user, I want a mission-specific dashboard showing instrument and product type download metrics [\#24](https://github.com/NASA-PDS/o11y-cloudfront-batch/issues/24)
+- As a user, I want year over year metrics for total egress [\#21](https://github.com/NASA-PDS/o11y-cloudfront-batch/issues/21)
+- Dashboard: EN Search Query analytics - queries over time period [\#9](https://github.com/NASA-PDS/o11y-cloudfront-batch/issues/9)
+- As a data scientist, I want to update and refine web metrics dashboards, to provide improved views on PDS node usage patterns over time [\#4](https://github.com/NASA-PDS/o11y-cloudfront-batch/issues/4)
+- As a data engineer, I want to sync logs from PDS website in an automated fashion [\#2](https://github.com/NASA-PDS/o11y-cloudfront-batch/issues/2)
+- As a Node Manager, I want to know the frequency of access of each archive artifact [\#22](https://github.com/NASA-PDS/o11y-cloudfront-batch/issues/22)
 
 **Improvements:**
 
-- Enable Python 3.12 compatibility [\#61](https://github.com/NASA-PDS/web-analytics/issues/61)
-- Map special characters in Athena/Presto SQL queries before dataset creation in QS. [\#13](https://github.com/NASA-PDS/web-analytics/issues/13)
-- Migrate PDS Web Analytics dashboards in PDS-managed AWS environment [\#3](https://github.com/NASA-PDS/web-analytics/issues/3)
+- Enable Python 3.12 compatibility [\#61](https://github.com/NASA-PDS/o11y-cloudfront-batch/issues/61)
+- Map special characters in Athena/Presto SQL queries before dataset creation in QS. [\#13](https://github.com/NASA-PDS/o11y-cloudfront-batch/issues/13)
+- Migrate PDS Web Analytics dashboards in PDS-managed AWS environment [\#3](https://github.com/NASA-PDS/o11y-cloudfront-batch/issues/3)
 
 **Defects:**
 
-- `en-web-analytics` is locked up and unable to use [\#51](https://github.com/NASA-PDS/web-analytics/issues/51) [[s.high](https://github.com/NASA-PDS/web-analytics/labels/s.high)]
-- Fix issue with parsing PPI Logs [\#45](https://github.com/NASA-PDS/web-analytics/issues/45)
-- Sync script fails silently if aws call fails [\#12](https://github.com/NASA-PDS/web-analytics/issues/12) [[s.medium](https://github.com/NASA-PDS/web-analytics/labels/s.medium)]
+- `en-web-analytics` is locked up and unable to use [\#51](https://github.com/NASA-PDS/o11y-cloudfront-batch/issues/51) [[s.high](https://github.com/NASA-PDS/o11y-cloudfront-batch/labels/s.high)]
+- Fix issue with parsing PPI Logs [\#45](https://github.com/NASA-PDS/o11y-cloudfront-batch/issues/45)
+- Sync script fails silently if aws call fails [\#12](https://github.com/NASA-PDS/o11y-cloudfront-batch/issues/12) [[s.medium](https://github.com/NASA-PDS/o11y-cloudfront-batch/labels/s.medium)]
 
 **Other closed issues:**
 
-- Update log sync to push pre-processed logs to eliminate need for report-manager [\#56](https://github.com/NASA-PDS/web-analytics/issues/56)
-- Update s3 log sync script gzip log files prior to upload to S3 [\#55](https://github.com/NASA-PDS/web-analytics/issues/55)
-- Develop web analytics architecture diagram [\#54](https://github.com/NASA-PDS/web-analytics/issues/54)
-- Investigate issue with PPI log format introducing odd characters [\#48](https://github.com/NASA-PDS/web-analytics/issues/48)
-- Update log loader and logstash to read ATM FTP logs [\#47](https://github.com/NASA-PDS/web-analytics/issues/47)
-- Fix issue parsing IMG logs [\#46](https://github.com/NASA-PDS/web-analytics/issues/46)
-- Update report service procedures for uploading logs and running web analytics tools [\#28](https://github.com/NASA-PDS/web-analytics/issues/28)
-- Do logs need to persist in S3? [\#25](https://github.com/NASA-PDS/web-analytics/issues/25)
-- Create sync script for syncing logs from logging server to AWS and load into Athena [\#15](https://github.com/NASA-PDS/web-analytics/issues/15)
-- Dashboard: EN Search Query analytics - most used queries or search terms [\#10](https://github.com/NASA-PDS/web-analytics/issues/10)
+- Update log sync to push pre-processed logs to eliminate need for report-manager [\#56](https://github.com/NASA-PDS/o11y-cloudfront-batch/issues/56)
+- Update s3 log sync script gzip log files prior to upload to S3 [\#55](https://github.com/NASA-PDS/o11y-cloudfront-batch/issues/55)
+- Develop web analytics architecture diagram [\#54](https://github.com/NASA-PDS/o11y-cloudfront-batch/issues/54)
+- Investigate issue with PPI log format introducing odd characters [\#48](https://github.com/NASA-PDS/o11y-cloudfront-batch/issues/48)
+- Update log loader and logstash to read ATM FTP logs [\#47](https://github.com/NASA-PDS/o11y-cloudfront-batch/issues/47)
+- Fix issue parsing IMG logs [\#46](https://github.com/NASA-PDS/o11y-cloudfront-batch/issues/46)
+- Update report service procedures for uploading logs and running web analytics tools [\#28](https://github.com/NASA-PDS/o11y-cloudfront-batch/issues/28)
+- Do logs need to persist in S3? [\#25](https://github.com/NASA-PDS/o11y-cloudfront-batch/issues/25)
+- Create sync script for syncing logs from logging server to AWS and load into Athena [\#15](https://github.com/NASA-PDS/o11y-cloudfront-batch/issues/15)
+- Dashboard: EN Search Query analytics - most used queries or search terms [\#10](https://github.com/NASA-PDS/o11y-cloudfront-batch/issues/10)
 
 
 

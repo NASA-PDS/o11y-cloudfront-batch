@@ -16,7 +16,7 @@ Basic Usage
 
 .. code-block:: bash
 
-    cd $WEB_ANALYTICS_HOME
+    cd $O11Y_BATCH_HOME
 
     # Using the package command (recommended)
     s3-log-sync -c config/config.yaml -d /var/log/pds
@@ -55,7 +55,7 @@ Set up as a cron job for automatic synchronization:
 .. code-block:: bash
 
     # Example: sync every hour
-    0 * * * * cd /path/to/web-analytics && s3-log-sync -c config/config.yaml -d /var/log/pds
+    0 * * * * cd /path/to/o11y-cloudfront-batch && s3-log-sync -c config/config.yaml -d /var/log/pds
 
 Logstash Processing
 -------------------
@@ -67,7 +67,7 @@ Start Logstash with the PDS configuration:
 
 .. code-block:: bash
 
-    cd $WEB_ANALYTICS_HOME
+    cd $O11Y_BATCH_HOME
 
     # Source the environment variables
     source .env
@@ -79,7 +79,7 @@ Start Logstash with the PDS configuration:
     ./scripts/logstash_build_config.sh
 
     # Start Logstash
-    logstash -f ${WEB_ANALYTICS_HOME}/config/logstash/config/pipelines.yml
+    logstash -f ${O11Y_BATCH_HOME}/config/logstash/config/pipelines.yml
 
 Running in Background
 ~~~~~~~~~~~~~~~~~~~~~
@@ -169,7 +169,7 @@ Monitor Logs
 .. code-block:: bash
 
     # Monitor nohup logs
-    source $WEB_ANALYTICS_HOME/.env
+    source $O11Y_BATCH_HOME/.env
     tail -f $OUTPUT_LOG
 
     # Monitor logstash logs

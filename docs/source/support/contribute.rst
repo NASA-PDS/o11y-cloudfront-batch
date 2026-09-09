@@ -11,9 +11,9 @@ Repository
 
 The PDS Web Analytics repository is hosted on GitHub:
 
-* **Repository**: https://github.com/NASA-PDS/web-analytics
-* **Issues**: https://github.com/NASA-PDS/web-analytics/issues
-* **Pull Requests**: https://github.com/NASA-PDS/web-analytics/pulls
+* **Repository**: https://github.com/NASA-PDS/o11y-cloudfront-batch
+* **Issues**: https://github.com/NASA-PDS/o11y-cloudfront-batch/issues
+* **Pull Requests**: https://github.com/NASA-PDS/o11y-cloudfront-batch/pulls
 
 Development Setup
 ~~~~~~~~~~~~~~~~~
@@ -26,7 +26,7 @@ Ways to Contribute
 Report Bugs
 ~~~~~~~~~~~
 
-If you find a bug, please `open an issue <https://github.com/NASA-PDS/web-analytics/issues/new>`_ with:
+If you find a bug, please `open an issue <https://github.com/NASA-PDS/o11y-cloudfront-batch/issues/new>`_ with:
 
 * A clear, descriptive title
 * Steps to reproduce the issue
@@ -38,7 +38,7 @@ If you find a bug, please `open an issue <https://github.com/NASA-PDS/web-analyt
 Request Features
 ~~~~~~~~~~~~~~~~
 
-Have an idea for a new feature? `Open an issue <https://github.com/NASA-PDS/web-analytics/issues/new>`_ with:
+Have an idea for a new feature? `Open an issue <https://github.com/NASA-PDS/o11y-cloudfront-batch/issues/new>`_ with:
 
 * A clear description of the feature
 * Use cases explaining why it would be useful
@@ -95,7 +95,7 @@ Submit Code Changes
 
        git push origin feature/your-feature-name
 
-8. `Create a Pull Request <https://github.com/NASA-PDS/web-analytics/compare>`_ on GitHub
+8. `Create a Pull Request <https://github.com/NASA-PDS/o11y-cloudfront-batch/compare>`_ on GitHub
 
 Pull Request Guidelines
 -----------------------
@@ -191,8 +191,8 @@ Questions?
 If you have questions about contributing:
 
 * Check the :doc:`/installation`, :doc:`/configuration`, and :doc:`/usage` guides
-* Review existing `issues <https://github.com/NASA-PDS/web-analytics/issues>`_
-* Ask in a `GitHub Discussion <https://github.com/NASA-PDS/web-analytics/discussions>`_
+* Review existing `issues <https://github.com/NASA-PDS/o11y-cloudfront-batch/issues>`_
+* Ask in a `GitHub Discussion <https://github.com/NASA-PDS/o11y-cloudfront-batch/discussions>`_
 * Contact the PDS Help Desk (see :doc:`contact`)
 
 Thank You!

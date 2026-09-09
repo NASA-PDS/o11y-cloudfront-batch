@@ -13,7 +13,7 @@ TXT_PATTERN = "*.txt"
 
 def create_test_data_dir():
     """Create a test data directory for testing."""
-    temp_dir = tempfile.mkdtemp(prefix="pds_web_analytics_test_")
+    temp_dir = tempfile.mkdtemp(prefix="pds_o11y_batch_test_")
     return temp_dir
 
 

@@ -162,8 +162,7 @@ class EgressReporter:
         def render_table(agg_name: str, label: str) -> str:
             buckets = aggs.get(agg_name, {}).get("buckets", [])
             rows = "".join(
-                f"<tr><td>{b['key']}</td><td>{b['gb']['value']:.2f}</td><td>{b['doc_count']}</td></tr>"
-                for b in buckets
+                f"<tr><td>{b['key']}</td><td>{b['gb']['value']:.2f}</td><td>{b['doc_count']}</td></tr>" for b in buckets
             )
             return (
                 f"<h3>{label}</h3>"
@@ -328,7 +327,9 @@ def parse_args() -> argparse.Namespace:
         "Requires ssm:GetParametersByPath/GetParameter on this path.",
     )
     parser.add_argument(
-        "--recipients", default="", help="Comma-separated list of report recipient addresses. Required unless --dry-run."
+        "--recipients",
+        default="",
+        help="Comma-separated list of report recipient addresses. Required unless --dry-run.",
     )
     parser.add_argument("--hours", type=int, default=24, help="Trailing window, in hours, the report covers.")
     parser.add_argument(

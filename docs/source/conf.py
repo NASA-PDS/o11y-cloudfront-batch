@@ -17,7 +17,7 @@ sys.path.insert(0, os.path.abspath('../../src'))
 
 # -- Project information -----------------------------------------------------
 
-project = "PDS Web Analytics"
+project = "PDS Web Analytics Batch"
 copyright = "2021 California Institute of Technology"
 author = "NASA Planetary Data System"
 
@@ -66,7 +66,7 @@ html_logo = "_static/images/PDS_Planets.png"
 html_context = {
     'display_github': True,
     "github_user": "nasa-pds",
-    "github_repo": "web-analytics",
+    "github_repo": "o11y-cloudfront-batch",
     "github_version": "main/docs/source/"
 }
 
