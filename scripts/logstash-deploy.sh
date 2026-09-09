@@ -202,7 +202,8 @@ else
     echo "logstash) with username/password/server/sender lines. See README.md 'Enable/update the"
     echo "daily egress report email'."
   fi
-  CRON_CMD="PYTHONPATH=\"$REPO_DIR/src\" AWS_REGION=\"$AWS_REGION\" python3.13 \"$REPO_DIR/scripts/egress_report.py\" --opensearch-endpoint \"$OPENSEARCH_ENDPOINT\" --index-pattern \"${INDEX_PREFIX}-*\" --region \"$AWS_REGION\" --smtp-env-file \"$SMTP_ENV_FILE\""
+  PYTHON_BIN="$(command -v python3.13 2>/dev/null || echo python3)"
+  CRON_CMD="PYTHONPATH=\"$REPO_DIR/src\" AWS_REGION=\"$AWS_REGION\" $PYTHON_BIN \"$REPO_DIR/scripts/egress_report.py\"" --opensearch-endpoint \"$OPENSEARCH_ENDPOINT\" --index-pattern \"${INDEX_PREFIX}-*\" --region \"$AWS_REGION\" --smtp-env-file \"$SMTP_ENV_FILE\""
   if [ -n "$SMTP_CONFIG_SSM_KEY_PATH" ]; then
     CRON_CMD="$CRON_CMD --smtp-config-ssm-path \"$SMTP_CONFIG_SSM_KEY_PATH\""
   fi

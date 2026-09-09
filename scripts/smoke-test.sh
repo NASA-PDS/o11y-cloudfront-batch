@@ -7,7 +7,8 @@
 
 set -euo pipefail
 
-python3.13 - <<'EOF'
+PYTHON_BIN="$(command -v python3.13 2>/dev/null || echo python3)"
+"$PYTHON_BIN" - <<'EOF'
 import boto3, json, sys
 from botocore.auth import SigV4Auth
 from botocore.awsrequest import AWSRequest
