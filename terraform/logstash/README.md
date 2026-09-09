@@ -4,10 +4,13 @@ Deploys a Logstash EC2 instance (Amazon Linux 2023, RPM install) that reads logs
 
 Reads the S3 bucket name and OpenSearch endpoint from SSM at plan time — deploy the S3 and o11y-platform OpenSearch modules first.
 
-EC2 creation is optional (`manage_ec2_instance`, default `true`) — production
-will likely reuse an existing EC2, in which case this module only manages
-the SSM Run-As document and parameter outputs. See
-["Using an existing EC2"](#using-an-existing-ec2-manage_ec2_instance--false)
+EC2 creation is optional (`manage_ec2_instance`, default `true`).
+
+**Production uses `manage_ec2_instance = false`** — Logstash runs on an
+existing EC2 managed outside Terraform. In that mode this module only
+creates the SSM Run-As document and publishes SSM parameter outputs; it
+never touches the EC2.
+See ["Using an existing EC2"](#using-an-existing-ec2-manage_ec2_instance--false)
 below.
 
 > **Requires `iam:PassRole`** — must be applied by a system administrator.
@@ -95,16 +98,12 @@ task apply VENUE=dev COMPONENT=o11y-cloudfront-batch/logstash
 
 ## Using an existing EC2 (`manage_ec2_instance = false`)
 
-Set in the venue's `terragrunt.hcl`:
+Production is configured in `cds-infra-deploy/venues/prod/o11y-cloudfront-batch/logstash/terragrunt.hcl`
+with `manage_ec2_instance = false` and `existing_instance_id` set to the prod instance.
 
-```hcl
-manage_ec2_instance  = false
-existing_instance_id = "i-0123456789abcdef0"
-```
-
-`task apply VENUE=dev COMPONENT=o11y-cloudfront-batch/logstash` then only creates/updates
+`task apply VENUE=prod COMPONENT=o11y-cloudfront-batch/logstash` then only creates/updates
 the SSM Run-As document and publishes `/pds/o11y-cloudfront-batch/ec2/logstash_instance_id`
-(from `existing_instance_id`) — it never touches the EC2 itself.
+(from `existing_instance_id`) — it never provisions, modifies, or destroys the EC2 itself.
 
 **Connecting to the box is entirely outside this module's control.** These
 instructions work regardless of *how* you get a root shell — an SSM

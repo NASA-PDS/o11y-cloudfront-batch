@@ -147,7 +147,7 @@ task apply VENUE=dev COMPONENT=o11y-cloudfront-batch/logstash
 
 **Logstash will get 403s from OpenSearch if Step 2 hasn't run yet** — `apply` succeeds either way, but OpenSearch access requires the access policy update first.
 
-> EC2 creation is optional (`manage_ec2_instance`, default `true`). Prod typically reuses an existing EC2 — set `manage_ec2_instance = false` and `existing_instance_id` in the venue's `terragrunt.hcl`. This step then only manages the SSM Run-As session document and publishes SSM parameters. See [`terraform/logstash/README.md`](logstash/README.md#using-an-existing-ec2-manage_ec2_instance--false) for manual Logstash install steps.
+> **Prod — no EC2 is created.** Production runs Logstash on an existing EC2 managed outside Terraform. `cds-infra-deploy/venues/prod/o11y-cloudfront-batch/logstash/terragrunt.hcl` sets `manage_ec2_instance = false` and `existing_instance_id` — this `apply` step only creates the SSM Run-As document and publishes the instance ID to SSM; it never touches the EC2 itself. See [`terraform/logstash/README.md`](logstash/README.md#using-an-existing-ec2-manage_ec2_instance--false) for details.
 
 ---
 
