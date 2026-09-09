@@ -1,5 +1,5 @@
 module "ec2_instance_role" {
-  source = "git@github.com:NASA-PDS/pdc-tf-modules.git//terraform/modules/iam/roles/ec2?ref=develop"
+  source = "git@github.com:NASA-PDS/pdc-tf-modules.git//terraform/modules/iam/roles/ec2?ref=main"
 
   venue                       = var.venue
   component                   = var.component
