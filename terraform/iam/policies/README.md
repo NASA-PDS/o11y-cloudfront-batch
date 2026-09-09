@@ -12,7 +12,7 @@ Creates the o11y-cloudfront-batch EC2 IAM policy and attaches it to the EC2 inst
 
 | Parameter | Published by |
 |---|---|
-| `/pds/o11y-cloudfront-batch/iam/roles/ec2/instance-profile-name` | `iam/roles` module |
+| `/pds/o11y-cloudfront-batch/iam/roles/ec2/instance-role-arn` | `iam/roles` module |
 
 Deploy `iam/roles` before this module.
 

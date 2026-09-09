@@ -17,7 +17,7 @@ resource "aws_ssm_parameter" "logstash_runas_document" {
   name        = "/pds/o11y-cloudfront-batch/ssm/logstash_runas_document"
   type        = "String"
   value       = aws_ssm_document.logstash_runas.name
-  description = "SSM document name to pass as --document-name for a Run-As session landing as the logstash user (no sudo)"
+  description = "SSM document name to pass as --document-name for a Run-As session landing as the pdsops user (no sudo)"
 }
 
 output "logstash_instance_id" {
@@ -28,5 +28,5 @@ output "logstash_instance_id" {
 
 output "logstash_ssm_document_name" {
   value       = aws_ssm_document.logstash_runas.name
-  description = "Pass as --document-name to land an SSM session as the logstash user (no sudo)"
+  description = "Pass as --document-name to land an SSM session as the pdsops user (no sudo)"
 }

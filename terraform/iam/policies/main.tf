@@ -8,11 +8,6 @@ locals {
   }
 }
 
-moved {
-  from = module.web_analytics
-  to   = module.o11y_cloudfront_batch
-}
-
 module "o11y_cloudfront_batch" {
   source = "./o11y-cloudfront-batch"
 

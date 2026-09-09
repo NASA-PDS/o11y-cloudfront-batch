@@ -1,8 +1,3 @@
-moved {
-  from = aws_iam_policy.ec2_web_analytics_access
-  to   = aws_iam_policy.ec2_o11y_cloudfront_batch_access
-}
-
 resource "aws_iam_policy" "ec2_o11y_cloudfront_batch_access" {
   name        = "pds-o11y-cloudfront-batch-access-policy"
   description = "Allow EC2 role to read from ${var.logs_s3_bucket_name} and write to OpenSearch (ARN from SSM)"
