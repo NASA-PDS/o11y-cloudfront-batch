@@ -32,7 +32,7 @@ locals {
 }
 
 module "ec2" {
-  source = "git@github.com:NASA-PDS/pdc-tf-modules.git//terraform/modules/ec2?ref=feature/update-ec2-module-oracle-linux-pdc"
+  source = "git@github.com:NASA-PDS/pdc-tf-modules.git//terraform/modules/ec2?ref=develop"
   count  = var.manage_ec2_instance ? 1 : 0
 
   ami_id           = var.ami_id
