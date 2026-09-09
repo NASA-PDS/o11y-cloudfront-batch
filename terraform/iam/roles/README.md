@@ -31,6 +31,7 @@ These are consumed automatically by `iam/policies` (role attachment) and `logsta
 | `cicd` | `string` | `iac` | Tag: CI/CD method. |
 | `managedby` | `string` | — | Tag: owner contact. |
 | `aws_region` | `string` | `us-west-2` | AWS region. |
+| `ec2users_dynamodb_table_arn` | `string` | — | ARN of the DynamoDB ec2users table; grants Get*/Query access on the EC2 role. Supplied by Terragrunt from `cds-infra-deploy`. |
 
 ## Outputs
 

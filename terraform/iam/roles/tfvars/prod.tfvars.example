@@ -2,5 +2,6 @@
 # Copy to prod.tfvars and fill in values.
 # Shared values (aws_region, tenant, component, cicd) are in common-prod.tfvars.
 
-venue     = "pds-cds-prod"
-managedby = "<your-email>"
+venue                       = "pds-cds-prod"
+managedby                   = "<your-email>"
+ec2users_dynamodb_table_arn = "<arn:aws:dynamodb:us-west-2:account-id:table/ec2users>"
