@@ -545,9 +545,19 @@ stays flat usually means it's stuck (e.g. blocked on the OpenSearch output).
 **Verify data is flowing into OpenSearch:**
 
 ```bash
-# From the EC2 — uses instance role credentials automatically
+# Connectivity + auth check (S3, OpenSearch reachable, SigV4 auth)
 bash /opt/o11y-cloudfront-batch/scripts/smoke-test.sh
+
+# Document counts — total, per-index, and per-node breakdown
+bash /opt/o11y-cloudfront-batch/scripts/os-doc-counts.sh
+
+# Narrow to a specific month's index
+bash /opt/o11y-cloudfront-batch/scripts/os-doc-counts.sh pds-weblogs-2026-09
 ```
+
+If the OpenSearch Dashboards index count appears stale, `os-doc-counts.sh` queries
+`/_count` and `/_cat/indices` directly via SigV4-signed requests — it bypasses the
+UI and confirms the true document count at the API level.
 
 ## Data Processing Overview
 
