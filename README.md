@@ -310,6 +310,8 @@ REPO_BRANCH=<your-branch> bash <(curl -fsSL https://raw.githubusercontent.com/NA
 
 **Enable/update the daily egress report email:**
 
+> **WARNING: The egress report scripts (`scripts/egress_report.py`, `src/pds/o11y_batch/egress_report.py`) have not been tested and are not known to work. The instructions below are retained for reference only — do not rely on them without first validating the scripts end-to-end.**
+
 SMTP credentials are read from a local file on the EC2 — no AWS permissions
 beyond reading a file already on disk. Create it once (as root or via sudo),
 before or after the deploy step below:
