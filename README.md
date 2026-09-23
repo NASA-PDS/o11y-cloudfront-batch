@@ -556,8 +556,9 @@ bash /opt/o11y-cloudfront-batch/scripts/os-doc-counts.sh pds-weblogs-2026-09
 ```
 
 If the OpenSearch Dashboards index count appears stale, `os-doc-counts.sh` queries
-`/_count` and `/_cat/indices` directly via SigV4-signed requests — it bypasses the
-UI and confirms the true document count at the API level.
+`/_cat/indices` for per-index counts and `/_search` with a terms aggregation for the
+per-node breakdown — all via SigV4-signed requests that bypass the UI and confirm
+the true document count at the API level.
 
 ## Data Processing Overview
 
