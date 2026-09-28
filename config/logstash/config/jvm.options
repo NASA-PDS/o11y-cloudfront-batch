@@ -1,0 +1,22 @@
+## JVM configuration for Logstash on t3.2xlarge (32 GB RAM).
+## Heap sized to give GC room while leaving memory for OS, plugins, and off-heap buffers.
+## Do not exceed half of total system RAM; Logstash's off-heap usage (network buffers,
+## JVM metaspace, native code) can match or exceed the heap at high throughput.
+
+-Xms8g
+-Xmx8g
+
+################################################################
+## Expert settings — only change with a specific reason
+################################################################
+
+## GC configuration
+11-13:-XX:+UseConcMarkSweepGC
+11-13:-XX:CMSInitiatingOccupancyFraction=75
+11-13:-XX:+UseCMSInitiatingOccupancyOnly
+
+## Locale
+-Dfile.encoding=UTF-8
+-Djruby.compile.invokedynamic=true
+-Djruby.jit.threshold=0
+-XX:+HeapDumpOnOutOfMemoryError
