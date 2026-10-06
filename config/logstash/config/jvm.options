@@ -1,0 +1,48 @@
+## JVM configuration for Logstash on t3.2xlarge (32 GB RAM).
+##
+## WHERE THIS FILE GOES:
+##   scripts/logstash-deploy.sh copies config/logstash/config/* to /etc/logstash/
+##   on the EC2 instance, so this file lands at /etc/logstash/jvm.options and
+##   replaces the defaults bundled with the Logstash RPM at install time.
+##   Changes here take effect on the next deploy + service restart.
+##
+## WHY IT EXISTS:
+##   Logstash's default heap is 1 GB. Under sustained EN pipeline load on
+##   t3.2xlarge (32 GB RAM), the default heap saturated at 94%, triggering
+##   GC stall and dropping output to 0 events/sec. See issue #107.
+##   Setting -Xms/-Xmx to 8 GB resolved the stall immediately.
+##
+## BUNDLED JDK:
+##   Logstash 8.x ships with a bundled OpenJDK 21 — no separate Java install
+##   is needed or used on this instance. This file does not set JAVA_HOME.
+##   If the instance type or Logstash major version changes, revisit all values.
+##
+## HEAP SIZING RULE:
+##   Do not exceed half of total system RAM. Logstash's off-heap usage
+##   (network buffers, JVM metaspace, native code) can match or exceed the
+##   heap at high throughput, so the other half must remain free for the OS.
+
+-Xms8g
+-Xmx8g
+
+################################################################
+## Expert settings — only change with a specific reason
+################################################################
+
+## G1GC is the default on JDK 21; no explicit flags needed. CMS was removed
+## in Java 14, so the 11-13:-XX:+UseConcMarkSweepGC lines common in older
+## jvm.options templates are not included here.
+
+## Locale
+-Dfile.encoding=UTF-8
+
+## JRuby settings:
+## invokedynamic: enables JVM method-handle optimizations for JRuby's dynamic
+##   dispatch, improving throughput at the cost of a longer warmup period.
+## jit.threshold=0: compile all JRuby methods to JVM bytecode immediately
+##   (no interpreter warm-up), which reduces latency on cold filter execution.
+-Djruby.compile.invokedynamic=true
+-Djruby.jit.threshold=0
+
+## Dump heap on OOM for post-mortem analysis
+-XX:+HeapDumpOnOutOfMemoryError
