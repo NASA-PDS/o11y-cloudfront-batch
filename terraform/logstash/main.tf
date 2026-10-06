@@ -146,4 +146,3 @@ resource "aws_ssm_document" "logstash_runas" {
 
   tags = local.logstash_tags
 }
-
