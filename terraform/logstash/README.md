@@ -158,6 +158,13 @@ bash <(curl -fsSL https://raw.githubusercontent.com/NASA-PDS/o11y-cloudfront-bat
 systemctl --user status logstash
 ```
 
+On a venue with a large initial S3 backlog, consider staging the rollout in
+step 4 instead: set `ENABLED_NODES=en` (comma/space-separated node IDs) so
+only EN's pipeline runs at first, then redeploy later with `ENABLED_NODES`
+unset to bring the rest of the nodes online once EN has caught up. See
+[`../../README.md`](../../README.md#deploying-with-a-subset-of-nodes) for
+details.
+
 `EGRESS_REPORT_RECIPIENTS` in step 4 is **required to enable the daily
 egress report cron job** — `logstash-deploy.sh` skips installing it silently
 if unset. SMTP credentials are read from a local file on the EC2
