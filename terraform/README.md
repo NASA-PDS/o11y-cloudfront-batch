@@ -193,6 +193,12 @@ bash <(curl -fsSL https://raw.githubusercontent.com/NASA-PDS/o11y-cloudfront-bat
 export REPO_BRANCH=<your-branch>
 export S3_CF_BUCKET_NAME=<cf-logs-bucket-name>
 bash <(curl -fsSL https://raw.githubusercontent.com/NASA-PDS/o11y-cloudfront-batch/refs/heads/${REPO_BRANCH}/scripts/logstash-deploy.sh)
+
+# To stage the rollout on a venue with a large initial S3 backlog, bring up
+# only EN first (ENABLED_NODES, comma/space-separated node IDs), then
+# redeploy with it unset once EN has caught up to enable the rest:
+export ENABLED_NODES=en
+bash <(curl -fsSL https://raw.githubusercontent.com/NASA-PDS/o11y-cloudfront-batch/refs/heads/main/scripts/logstash-deploy.sh)
 ```
 
 > `logstash-deploy.sh` must run as `pdsops`, never root — it checks and

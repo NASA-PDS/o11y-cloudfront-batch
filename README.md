@@ -16,6 +16,7 @@ This system ingests web access logs from various PDS nodes (ATM, EN, GEO, IMG, N
 * [Usage](#usage)
   + [S3 Log Synchronization](#s3-log-synchronization)
   + [Logstash Processing](#logstash-processing)
+    - [Deploying with a Subset of Nodes](#deploying-with-a-subset-of-nodes)
   + [Testing](#testing)
   + [Monitoring](#monitoring)
   + [Adding Tests for New Log Formats](#adding-tests-for-new-log-formats)
@@ -148,6 +149,18 @@ LS_SETTINGS_DIR=$(pwd)/config/logstash/config ./scripts/logstash_build_config.sh
 ```
 
 This generates `config/logstash/config/pipelines.yml` and one `.conf` file per PDS node under `config/logstash/config/pipelines/`.
+
+To build only a subset of nodes (e.g. to let one node's S3 backlog catch up
+before enabling the rest), set `ENABLED_NODES` to a comma/space-separated,
+case-insensitive list of node IDs:
+
+```bash
+ENABLED_NODES=en LS_SETTINGS_DIR=$(pwd)/config/logstash/config ./scripts/logstash_build_config.sh
+```
+
+Leaving `ENABLED_NODES` unset (the default) builds all nodes, as above. See
+[Deploying with a subset of nodes](#deploying-with-a-subset-of-nodes) below
+for the full staged-rollout workflow.
 
 #### 5. Apply the OpenSearch Index Template (manual/one-time)
 
@@ -307,6 +320,29 @@ bash <(curl -fsSL https://raw.githubusercontent.com/NASA-PDS/o11y-cloudfront-bat
 # To deploy from a non-main branch:
 REPO_BRANCH=<your-branch> bash <(curl -fsSL https://raw.githubusercontent.com/NASA-PDS/o11y-cloudfront-batch/main/scripts/logstash-deploy.sh)
 ```
+
+##### Deploying with a Subset of Nodes
+
+Set `ENABLED_NODES` (comma/space-separated, case-insensitive node IDs:
+`atm`, `en`, `geo`, `img`, `naif`, `ppi`, `rings`, `sbn`) to restrict the
+deploy to one or more nodes. Leaving it unset enables all nodes — the
+default. This is useful for a staged rollout, e.g. on a brand-new venue
+with a large S3 backlog: bring EN online by itself first, let it catch up,
+then redeploy with all nodes enabled.
+
+```bash
+# First deploy: EN only, so its backlog catches up without competing for
+# Logstash resources with the other 7 nodes.
+ENABLED_NODES=en bash <(curl -fsSL https://raw.githubusercontent.com/NASA-PDS/o11y-cloudfront-batch/main/scripts/logstash-deploy.sh)
+
+# Once EN has caught up, redeploy with ENABLED_NODES unset (or the full
+# list) to bring the rest of the nodes online:
+bash <(curl -fsSL https://raw.githubusercontent.com/NASA-PDS/o11y-cloudfront-batch/main/scripts/logstash-deploy.sh)
+```
+
+Re-running the deploy script always regenerates `pipelines.yml` and
+`pipelines/*.conf` from scratch, so a node disabled in one run leaves no
+stale config behind in a later run.
 
 **Enable/update the daily egress report email:**
 
