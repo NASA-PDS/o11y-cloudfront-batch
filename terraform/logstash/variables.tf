@@ -94,3 +94,9 @@ variable "repo_branch" {
   type        = string
   default     = "main"
 }
+
+variable "bastion_target_sg_ssm_path" {
+  description = "SSM parameter path for the bastion target SG ID. When set, the SG is attached to the Logstash EC2 to allow SSH from the bastion. Leave empty to skip."
+  type        = string
+  default     = ""
+}
