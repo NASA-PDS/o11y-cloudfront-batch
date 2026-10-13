@@ -34,7 +34,7 @@ practice, expect `aws ssm start-session` to land you as `root`** regardless
 of `--document-name`, and switch explicitly:
 
 ```bash
-sudo runuser -l pdsops    # or: su - pdsops
+sudo -iu pdsops
 ```
 
 From there, execution, logging, monitoring, and git-based config updates
@@ -46,7 +46,7 @@ only for deliberate admin actions like a Logstash version upgrade.
 > Granting operators `ssm:StartSession` on the `logstash_runas` document's
 > ARN (in addition to the instance ARN) is an IAM/SSO concern owned outside
 > this repo — this module only manages the EC2 instance role. Until/unless
-> that's granted, `sudo runuser -l pdsops` after connecting is the
+> that's granted, `sudo -iu pdsops` after connecting is the
 > reliable path, and works regardless of IAM state.
 
 ## SSM dependencies (read at plan time)
@@ -141,7 +141,7 @@ curl -fsSL https://raw.githubusercontent.com/NASA-PDS/o11y-cloudfront-batch/main
   | sudo LOGSTASH_VERSION=8.18.0 bash
 
 # 3. Switch to the pdsops user — no sudo from here on.
-sudo runuser -l pdsops
+sudo -iu pdsops
 
 # 4. Operator: deploy config and start the service.
 #    REPO_DIR defaults to /opt/o11y-cloudfront-batch — override if local policy
@@ -195,7 +195,7 @@ aws ssm start-session \
 ```
 
 If that still lands you as `root` (missing IAM grant on the document — see
-above), fall back to `sudo runuser -l pdsops` after connecting.
+above), fall back to `sudo -iu pdsops` after connecting.
 
 The only step that ever needs sudo/root again is re-running
 `logstash-bootstrap.sh` for a deliberate admin action like a Logstash

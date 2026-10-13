@@ -32,11 +32,12 @@ locals {
 }
 
 module "ec2" {
-  source = "git@github.com:NASA-PDS/pdc-tf-modules.git//terraform/modules/ec2?ref=main"
+  source = "git@github.com:NASA-PDS/pdc-tf-modules.git//terraform/modules/ec2?ref=feature/51-bastion-module"
   count  = var.manage_ec2_instance ? 1 : 0
 
-  ami_id           = var.ami_id
-  instance_profile = data.aws_ssm_parameter.ec2_instance_profile_name.value
+  ami_id                     = var.ami_id
+  instance_profile           = data.aws_ssm_parameter.ec2_instance_profile_name.value
+  bastion_target_sg_ssm_path = var.bastion_target_sg_ssm_path
 
   ec2_instance_configs = [{
     instance_name    = local.ec2_name
