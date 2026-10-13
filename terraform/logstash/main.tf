@@ -42,7 +42,10 @@ module "ec2" {
     instance_name    = local.ec2_name
     instance_type    = var.logstash_instance_type
     subnet_id        = sort(data.aws_subnets.private[0].ids)[0]
-    security_groups  = [data.aws_security_group.logstash_ec2[0].id]
+    security_groups  = [
+      data.aws_security_group.logstash_ec2[0].id,
+      data.aws_ssm_parameter.bastion_target_sg_id[0].value,
+    ]
     root_volume_size = 30
     root_volume_type = "gp3"
     user_data = base64encode(templatefile("${path.module}/../templates/logstash-userdata.sh.tpl", {

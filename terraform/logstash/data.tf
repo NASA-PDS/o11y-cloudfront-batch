@@ -25,6 +25,13 @@ data "aws_security_group" "logstash_ec2" {
   vpc_id = var.vpc_id
 }
 
+# Target SG published by pdc-cds-infra/bastion-core. Attaching it to the
+# Logstash EC2 allows inbound SSH from the bastion — no world-open port 22.
+data "aws_ssm_parameter" "bastion_target_sg_id" {
+  count = var.manage_ec2_instance ? 1 : 0
+  name  = "/pds/cds-infra/bastion-core/target-security-group-id"
+}
+
 data "aws_subnets" "private" {
   count = var.manage_ec2_instance ? 1 : 0
 
