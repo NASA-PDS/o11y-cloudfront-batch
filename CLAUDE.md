@@ -184,6 +184,31 @@ The OpenSearch index template (`config/opensearch/ecs-8.17-custom-template.json`
 4. Add test cases with sample logs from the new node
 5. Rebuild configs: `./scripts/logstash_build_config.sh`
 
+### Deploying With a Subset of Nodes Enabled
+
+`scripts/logstash_build_config.sh` and `scripts/logstash-deploy.sh` both honor an
+optional `ENABLED_NODES` env var: a comma/space-separated, case-insensitive list of
+node IDs (`atm`, `en`, `geo`, `img`, `naif`, `ppi`, `rings`, `sbn`). Unset/empty
+enables all nodes — unchanged default behavior.
+
+This supports a staged rollout: deploy with one node enabled so its S3 backlog
+catches up without competing for Logstash workers/JVM heap with the others, then
+redeploy once caught up to bring the rest online.
+
+```bash
+# First deploy: EN only
+ENABLED_NODES=en bash scripts/logstash-deploy.sh
+
+# Later, once EN has caught up: all nodes
+bash scripts/logstash-deploy.sh
+```
+
+The build script validates every requested ID against the node IDs actually present
+under `config/logstash/config/inputs/` (exits with an error listing valid IDs
+otherwise), filters both the generated `pipelines.yml` and `pipelines/*.conf` to the
+enabled set, and removes stale pipeline files from a prior build so a node disabled
+in one run never lingers into the next.
+
 ### Modifying Log Processing
 
 - **Parsing changes**: Edit `config/logstash/config/shared/pds-filter.conf`

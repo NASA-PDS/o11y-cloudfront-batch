@@ -24,6 +24,13 @@
 #   AWS_REGION               — AWS region (default: us-west-2)
 #   INDEX_PREFIX             — OpenSearch index prefix (default: pds-weblogs)
 #   S3_CF_BUCKET_NAME        — CloudFront logs bucket (EN only; default: empty)
+#   ENABLED_NODES            — comma/space-separated node IDs to enable
+#                              (atm, en, geo, img, naif, ppi, rings, sbn).
+#                              Default: all nodes. Use this for a staged
+#                              rollout -- e.g. ENABLED_NODES=en on the first
+#                              deploy to let EN's backlog catch up alone,
+#                              then redeploy with it unset to bring the rest
+#                              online.
 #
 # Daily egress report cron job — installed only when EGRESS_REPORT_RECIPIENTS
 # is set (REQUIRED at deploy time to enable the report; everything else has
@@ -71,6 +78,7 @@ if [ -z "${S3_CF_BUCKET_NAME:-}" ] && [ -f "$LOGSTASH_CONFIG_DIR/env" ]; then
   S3_CF_BUCKET_NAME="$(grep -E '^S3_CF_BUCKET_NAME=' "$LOGSTASH_CONFIG_DIR/env" | tail -1 | cut -d= -f2-)"
 fi
 S3_CF_BUCKET_NAME="${S3_CF_BUCKET_NAME:-}"
+ENABLED_NODES="${ENABLED_NODES:-}"
 
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 
@@ -96,6 +104,7 @@ if [ -z "$S3_CF_BUCKET_NAME" ]; then
 else
   echo "CF Bucket: $S3_CF_BUCKET_NAME"
 fi
+echo "Enabled nodes: ${ENABLED_NODES:-all}"
 echo ""
 
 # ----------------------------------------
@@ -119,7 +128,7 @@ cp -r "$REPO_DIR/config/logstash/config/"* "$LOGSTASH_CONFIG_DIR/"
 echo "Config deployed to $LOGSTASH_CONFIG_DIR"
 
 echo "--- Building Logstash pipeline configs ---"
-LS_SETTINGS_DIR="$LOGSTASH_CONFIG_DIR" \
+LS_SETTINGS_DIR="$LOGSTASH_CONFIG_DIR" ENABLED_NODES="$ENABLED_NODES" \
   bash "$REPO_DIR/scripts/logstash_build_config.sh"
 echo "pipelines.yml and pipeline configs generated"
 
