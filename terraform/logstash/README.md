@@ -193,11 +193,23 @@ bash <(curl -fsSL https://raw.githubusercontent.com/NASA-PDS/o11y-cloudfront-bat
 systemctl --user status logstash
 ```
 
-`EGRESS_REPORT_RECIPIENTS` is **required to enable the daily egress report
-cron job** — `logstash-deploy.sh` skips it silently if unset. SMTP
-credentials are read from `/etc/logstash/smtp.env` — see the root
-[`README.md`](../../README.md#quick-reference-from-an-ssm-session-on-the-ec2-as-the-pdsops-user)
-for the exact format.
+On a venue with a large initial S3 backlog, consider staging the rollout in
+step 2 instead: set `ENABLED_NODES=en` (comma/space-separated node IDs) so
+only EN's pipeline runs at first, then redeploy later with `ENABLED_NODES`
+unset to bring the rest of the nodes online once EN has caught up. See
+[`../../README.md`](../../README.md#deploying-with-a-subset-of-nodes) for
+details.
+
+`EGRESS_REPORT_RECIPIENTS` in step 2 is **required to enable the daily
+egress report cron job** — `logstash-deploy.sh` skips installing it silently
+if unset. SMTP credentials are read from a local file on the EC2
+(`/etc/logstash/smtp.env` by default, override with `SMTP_ENV_FILE`) — no
+extra AWS permissions needed. Create that file once by hand before (or
+after) this step; see [`../../README.md`](../../README.md#quick-reference-from-an-ssm-session-on-the-ec2-as-the-pdsops-user)
+for the exact format and the full list of egress-report env vars. (SSM is
+also supported as a fallback via `SMTP_CONFIG_SSM_KEY_PATH`, but requires an
+IAM grant this module doesn't provision by default — the local file avoids
+that entirely.)
 
 ### Day-2 operations — no sudo
 
