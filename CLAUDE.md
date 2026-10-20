@@ -228,32 +228,31 @@ at startup from `/etc/logstash/env` (loaded by the systemd unit), not at build t
 3. Test grok patterns using Logstash's `-t` flag for config validation
 4. Add test cases in `tests/` to prevent regressions
 
-### Connecting to the Logstash EC2 (SSM)
+### Connecting to the Logstash EC2
 
-Access is via AWS Systems Manager Session Manager only — no SSH keys, no
-inbound security group rules:
-
-```bash
-aws ssm start-session --target <instance-id>
-```
-
-**This lands as `root`.** Logstash runs as a `systemd --user` service under
-the `pdsops` key-user account, and day-2 operations (service control, logs,
-config redeploys via `scripts/logstash-deploy.sh`) are meant to run as that
-account with no sudo — but the session does not land there automatically.
-Switch in place immediately after connecting:
+Two access paths. SSH through the bastion lands you as your own user (your key
+must be enrolled in the `ec2users` DynamoDB table); SSM lands you as `ssm-user`.
+Either way, switch to `pdsops` afterwards:
 
 ```bash
-sudo runuser -l pdsops    # or: su - pdsops
-cd /opt/o11y-cloudfront-batch
-```
+# Via bastion (preferred):
+NASA_ID="<nasa-id>"
+FQDN=$(aws ssm get-parameter --name /pds/o11y-cloudfront-batch/ec2/logstash_fqdn \
+  --query Parameter.Value --output text)
+ZONE=$(aws ssm get-parameter --name /pds/hosted-zone/name \
+  --query Parameter.Value --output text)
+ssh ${NASA_ID}@pds-cds-bastion-core.${ZONE}
+# then from the bastion:
+ssh ${NASA_ID}@${FQDN}
+sudo -iu pdsops
 
-A custom SSM Run-As document (`aws_ssm_document.logstash_runas` in
-`terraform/logstash/main.tf`) can make `--document-name <doc>` land
-directly as `pdsops`, but it requires an IAM grant
-(`ssm:StartSession` on the document ARN) that may not be provisioned —
-don't assume it works without confirming; the `runuser` switch above is
-the reliable fallback regardless of IAM state.
+# Via SSM (no bastion required):
+INSTANCE_ID=$(aws ssm get-parameter \
+  --name /pds/o11y-cloudfront-batch/ec2/logstash_instance_id \
+  --query Parameter.Value --output text)
+aws ssm start-session --target ${INSTANCE_ID}
+sudo -iu pdsops
+```
 
 Once you're `pdsops`: `systemctl --user status logstash`,
 `tail -f /var/log/logstash/logstash-plain.log` for logs (`journalctl`
@@ -263,25 +262,26 @@ scripts/logstash-deploy.sh` to redeploy config. Full runbooks:
 
 ### First-Boot Setup (new EC2)
 
-Userdata only installs the SSM agent — everything else is done manually
-after connecting. Two-phase process:
+**Terraform-managed instances:** userdata runs the full bootstrap
+automatically (Logstash install + pdsops account setup). No root step
+needed. Wait a few minutes after `task apply`, then connect as `pdsops`
+and run `logstash-deploy.sh`.
 
-**Phase 1 — SA (root required):** Install Logstash + configure the `pdsops` key-user.
-The bootstrap script is repo-independent and can be piped directly from GitHub:
+**Existing/external EC2s (`manage_ec2_instance = false`):** run the
+bootstrap script as root once first:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/NASA-PDS/o11y-cloudfront-batch/main/scripts/logstash-bootstrap.sh \
   | sudo LOGSTASH_VERSION=8.18.0 bash
 ```
 
-**Phase 2 — Operator (no sudo):** Clone the repo, deploy config, start the service.
-`REPO_DIR` defaults to `/opt/o11y-cloudfront-batch`; override to `/usr/local/applications/o11y-cloudfront-batch` if required by local policy.
+**Operator step (no sudo, same for both cases):**
 
 ```bash
-sudo runuser -l pdsops
-export REPO_DIR=/opt/o11y-cloudfront-batch
-export REPO_BRANCH=main
-export S3_CF_BUCKET_NAME=<cf-logs-bucket-or-empty-string>
+sudo -iu pdsops
+S3_CF_BUCKET_NAME="<cf-logs-bucket-or-empty-string>"
+REPO_BRANCH=main
+export S3_CF_BUCKET_NAME REPO_BRANCH
 bash <(curl -fsSL https://raw.githubusercontent.com/NASA-PDS/o11y-cloudfront-batch/main/scripts/logstash-deploy.sh)
 ```
 

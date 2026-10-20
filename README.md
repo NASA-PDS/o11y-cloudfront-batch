@@ -75,7 +75,7 @@ PDS nodes upload access logs to a shared `pds-logs` S3 bucket using Data Upload 
 
 ### Production deployment on AWS
 
-See [`terraform/README.md`](terraform/README.md) for the full step-by-step deployment guide. Infrastructure runs on an MCP Amazon Linux 2023 EC2 with Logstash installed via RPM and managed by systemd. Access is via AWS Systems Manager (SSM) — no SSH keys or special EC2 users required.
+See [`terraform/README.md`](terraform/README.md) for the full step-by-step deployment guide. Infrastructure runs on a PDS Cloud Oracle Linux 9 EC2 with Logstash installed via RPM and managed by systemd. Access is via SSH through the CDS bastion host or AWS Systems Manager (SSM).
 
 ### Local development and testing
 
@@ -262,33 +262,34 @@ s3-log-sync -c config/config.yaml -d /var/log/pds --no-gzip
 ### Logstash Processing
 
 In production, Logstash runs as a `systemd --user` service under the shared `pdsops`
-key-user account on an SA-managed EC2. Access is via AWS Systems Manager
-(no SSH keys, no inbound rules) — day-2 operations (service control, logs,
-config updates) never require sudo once you're the `pdsops` user.
+key-user account on a PDS Cloud EC2. Access is via SSH through the CDS bastion host
+or AWS Systems Manager (SSM) — day-2 operations (service control, logs, config
+updates) never require sudo once you're the `pdsops` user.
 Full operational runbooks are in [`terraform/README.md`](terraform/README.md).
 
-#### Quick reference (from an SSM session on the EC2, as the pdsops user)
+#### Quick reference (from the EC2, as the pdsops user)
 
-**SSM into the EC2, then switch to `pdsops`.** In practice, `aws ssm
-start-session` lands you as `root` regardless of `--document-name`/Run-As
-(that depends on an IAM grant — `ssm:StartSession` on the Run-As document's
-ARN — that may not be in place). The reliable path is always:
+**Connect, then switch to `pdsops`.** Two paths:
 
 ```bash
-aws ssm start-session \
-  --target $(aws ssm get-parameter \
-    --name /pds/o11y-cloudfront-batch/ec2/logstash_instance_id \
-    --query Parameter.Value --output text)
+# Via bastion (preferred):
+NASA_ID="<nasa-id>"
+FQDN=$(aws ssm get-parameter --name /pds/o11y-cloudfront-batch/ec2/logstash_fqdn \
+  --query Parameter.Value --output text)
+ZONE=$(aws ssm get-parameter --name /pds/hosted-zone/name \
+  --query Parameter.Value --output text)
+ssh ${NASA_ID}@pds-cds-bastion-core.${ZONE}
+# then from the bastion:
+ssh ${NASA_ID}@${FQDN}
+sudo -iu pdsops
 
-# You land as root — switch in place before running anything below:
-sudo runuser -l pdsops
+# Via SSM (no bastion required):
+INSTANCE_ID=$(aws ssm get-parameter \
+  --name /pds/o11y-cloudfront-batch/ec2/logstash_instance_id \
+  --query Parameter.Value --output text)
+aws ssm start-session --target ${INSTANCE_ID}
+sudo -iu pdsops
 ```
-
-(`su - pdsops` works the same way.) If your IAM identity does have the
-Run-As grant, you can skip the switch by adding `--document-name $(aws ssm
-get-parameter --name /pds/o11y-cloudfront-batch/ssm/logstash_runas_document --query
-Parameter.Value --output text)` to `start-session` — but don't rely on it
-without confirming it actually lands you as `pdsops` first.
 
 **Service control (no sudo):**
 ```bash
@@ -363,9 +364,10 @@ systemctl --user start logstash
 bash /opt/o11y-cloudfront-batch/scripts/smoke-test.sh
 ```
 
-> An admin occasionally needs `sudo bash scripts/logstash-bootstrap.sh` — but
-> only for installing/upgrading Logstash itself or re-provisioning the
-> `logstash` account, not for routine operations.
+> `sudo bash scripts/logstash-bootstrap.sh` is needed only for Logstash
+> version upgrades on an existing instance or for re-provisioning the
+> `pdsops` account — not for routine operations, and not at first boot on
+> Terraform-managed instances (userdata handles that automatically).
 
 ### Testing
 

@@ -3,13 +3,20 @@
 # Logstash RPM + plugins, and configure the `pdsops` key-user account for
 # no-sudo day-2 operations.
 #
+# NOTE: On Terraform-managed EC2s this script is NOT needed at first boot —
+# the same steps are baked into the EC2 userdata (logstash-userdata.sh.tpl)
+# and run automatically. Use this script only for:
+#   - Upgrading Logstash to a new version on a running instance
+#   - Re-provisioning the pdsops account after an AMI rebuild
+#   - Setting up an existing EC2 that predates the Terraform module
+#     (manage_ec2_instance = false)
+#
 # The `pdsops` user is pre-provisioned in the SA-managed AMI. This script
 # does not create the account — it only installs Logstash and sets up the
 # directories and systemd unit the account needs.
 #
-# Run manually once after first boot via SSM, and again only for deliberate
-# SA actions such as a Logstash version upgrade. Does NOT require the
-# o11y-cloudfront-batch repo to be checked out — download and run directly:
+# Does NOT require the o11y-cloudfront-batch repo to be checked out —
+# download and run directly:
 #
 #   curl -fsSL https://raw.githubusercontent.com/NASA-PDS/o11y-cloudfront-batch/main/scripts/logstash-bootstrap.sh \
 #     | sudo bash

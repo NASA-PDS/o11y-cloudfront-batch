@@ -41,7 +41,7 @@ variable "resource_prefix" {
 }
 
 variable "manage_ec2_instance" {
-  description = "Whether this module creates the Logstash EC2 (launch template + instance). Set to false to reuse an existing, externally-managed EC2 (e.g. production) — see existing_instance_id and terraform/logstash/README.md 'Using an existing EC2'."
+  description = "Whether this module creates the Logstash EC2 instance. Set to false to reuse an existing, externally-managed EC2 (e.g. production) — see existing_instance_id and terraform/logstash/README.md 'Using an existing EC2'."
   type        = bool
   default     = true
 }
@@ -93,6 +93,12 @@ variable "repo_branch" {
   description = "Branch of the o11y-cloudfront-batch repo to clone at EC2 first boot."
   type        = string
   default     = "main"
+}
+
+variable "private_zone_name" {
+  description = "Name of the Route53 private hosted zone (attached to vpc_id) that holds the Logstash EC2's A record. Required when manage_ec2_instance = true. Must differ from the account's public zone name, which a private zone would shadow inside the VPC (e.g. use a *.internal name)."
+  type        = string
+  default     = ""
 }
 
 variable "bastion_target_sg_ssm_path" {

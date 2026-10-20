@@ -1,10 +1,11 @@
 # ---------------------------------------------------------------------------
 # Logstash EC2 instance
 # ---------------------------------------------------------------------------
-# AMI: SA-managed private image (key-user pdsops pre-provisioned).
-# Logstash is installed directly via RPM (not Docker).
+# AMI: PDS Cloud Oracle Linux 9 image (key-user pdsops pre-provisioned).
+# Logstash is installed via RPM (not Docker) — baked into userdata so no
+# manual root step is needed after first boot.
 #
-# Access: AWS Systems Manager (no SSH key or inbound SG rules needed).
+# Access: SSH via the CDS bastion host, or AWS Systems Manager.
 # Instance role is managed separately in terraform/iam/roles/ and its
 # profile name is read from SSM at /pds/<component>/iam/roles/ec2/instance-profile-name
 # (published by the iam/roles module after apply).
@@ -32,7 +33,7 @@ locals {
 }
 
 module "ec2" {
-  source = "git@github.com:NASA-PDS/pdc-tf-modules.git//terraform/modules/ec2?ref=feature/51-bastion-module"
+  source = "git@github.com:NASA-PDS/pdc-tf-modules.git//terraform/modules/ec2?ref=develop"
   count  = var.manage_ec2_instance ? 1 : 0
 
   ami_id                     = var.ami_id
@@ -47,7 +48,8 @@ module "ec2" {
     root_volume_size = 30
     root_volume_type = "gp3"
     user_data = base64encode(templatefile("${path.module}/../templates/logstash-userdata.sh.tpl", {
-      aws_region = var.aws_region
+      aws_region       = var.aws_region
+      logstash_version = var.logstash_version
     }))
   }]
 
@@ -60,6 +62,47 @@ module "ec2" {
   }
 }
 
+
+# ---------------------------------------------------------------------------
+# Private DNS — the Logstash EC2 stays private behind the bastion, so its name
+# lives in a Route53 *private* hosted zone attached to the bastion's VPC. The
+# record resolves only inside that VPC (e.g. from the bastion), never publicly.
+#
+# var.private_zone_name must NOT equal the account's public zone name: a private
+# zone shadows a same-named public zone for the whole VPC, hiding its records
+# (including the bastion's). Use a distinct name, e.g. a *.internal domain.
+#
+# The A record name matches the ec2 Name tag, so the SSH target and instance
+# name are the same. Only created when this module manages the EC2
+# (manage_ec2_instance = true).
+# ---------------------------------------------------------------------------
+resource "aws_route53_zone" "private" {
+  count   = var.manage_ec2_instance ? 1 : 0
+  name    = var.private_zone_name
+  comment = "Private zone for o11y-cloudfront-batch EC2s - resolves inside the VPC only"
+
+  vpc {
+    vpc_id = var.vpc_id
+  }
+
+  tags = local.logstash_tags
+
+  lifecycle {
+    precondition {
+      condition     = length(var.private_zone_name) > 0
+      error_message = "private_zone_name must be set when manage_ec2_instance = true."
+    }
+  }
+}
+
+resource "aws_route53_record" "logstash" {
+  count   = var.manage_ec2_instance ? 1 : 0
+  zone_id = aws_route53_zone.private[0].zone_id
+  name    = local.ec2_name
+  type    = "A"
+  ttl     = 30
+  records = [module.ec2[0].private_ips[local.ec2_name]]
+}
 
 # ---------------------------------------------------------------------------
 # SSM Run-As session document
