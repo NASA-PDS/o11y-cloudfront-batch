@@ -18,7 +18,7 @@ resource "aws_ssm_parameter" "logstash_fqdn" {
   name        = "/pds/o11y-cloudfront-batch/ec2/logstash_fqdn"
   type        = "String"
   value       = aws_route53_record.logstash[0].fqdn
-  description = "FQDN of the Logstash EC2 in the VPC-private hosted zone (SSH target from the bastion; does not resolve outside the VPC)"
+  description = "FQDN of the Logstash EC2 in the shared hosted zone (SSH target from the bastion)"
 }
 
 resource "aws_ssm_parameter" "logstash_runas_document" {
@@ -41,5 +41,5 @@ output "logstash_ssm_document_name" {
 
 output "logstash_fqdn" {
   value       = var.manage_ec2_instance ? aws_route53_record.logstash[0].fqdn : null
-  description = "FQDN of the Logstash EC2 in the VPC-private hosted zone. SSH to this from the bastion (it does not resolve outside the VPC). Null when manage_ec2_instance = false."
+  description = "FQDN of the Logstash EC2 in the shared hosted zone. SSH to this from the bastion. Null when manage_ec2_instance = false."
 }

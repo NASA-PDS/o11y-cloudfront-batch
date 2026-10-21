@@ -18,8 +18,7 @@ below.
 ## Resources
 
 - `module.ec2` (from `pdc-tf-modules//terraform/modules/ec2`) — EC2 instance, only created when `manage_ec2_instance = true`; userdata runs the full bootstrap at first boot (Logstash RPM + plugins, pdsops account setup, systemd unit) — no manual root step required. Access via SSM and SSH through the bastion.
-- `aws_route53_zone.private` — Route53 **private** hosted zone (`private_zone_name`) attached to `vpc_id` (the bastion's VPC). Names in it resolve only inside the VPC, so the EC2's private IP is never published publicly. Only created when `manage_ec2_instance = true`.
-- `aws_route53_record.logstash` — A record in that private zone pointing to the EC2 private IP; name matches the EC2 `Name` tag. Only created when `manage_ec2_instance = true`.
+- `aws_route53_record.logstash` — A record in the existing hosted zone (SSM `/pds/hosted-zone/name`, same zone as the bastion) pointing to the EC2 private IP; name matches the EC2 `Name` tag. Only created when `manage_ec2_instance = true`.
 - `aws_ssm_document.logstash_runas` — custom SSM Session document (Run-As `pdsops`) so operators never need sudo for day-2 ops; always created, works against any instance (created here or existing)
 - `aws_ssm_parameter.logstash_instance_id` — publishes the instance ID (created, or `existing_instance_id`) to `/pds/o11y-cloudfront-batch/ec2/logstash_instance_id`
 - `aws_ssm_parameter.logstash_runas_document` — publishes the Run-As document name to `/pds/o11y-cloudfront-batch/ssm/logstash_runas_document`
@@ -31,8 +30,8 @@ Two access paths are available:
 
 **SSH via bastion (preferred for interactive work):** The EC2 has the bastion
 target security group attached (`bastion_target_sg_ssm_path`) and a Route53 A
-record in a VPC-private hosted zone. The FQDN resolves only inside the VPC, so
-SSH to the bastion first (its name is in the public zone) and hop from there:
+record in the shared hosted zone. The instance has only a private IP, so
+SSH to the bastion first and hop from there:
 
 ```bash
 ZONE=$(aws ssm get-parameter --name /pds/hosted-zone/name \
@@ -88,7 +87,6 @@ Deploy `iam`, `s3`, and the o11y-platform OpenSearch module before applying this
 | `s3_cf_bucket_name` | `string` | `""` | S3 bucket containing CloudFront logs (EN node only). Leave empty to skip. |
 | `logstash_instance_type` | `string` | `t3.large` | EC2 instance type. Only used when `manage_ec2_instance = true`. |
 | `logstash_version` | `string` | `8.18.0` | Logstash RPM version to install (baked into userdata at apply time). |
-| `private_zone_name` | `string` | `""` | Name of the Route53 private hosted zone created here and attached to `vpc_id`. Required when `manage_ec2_instance = true`. Must differ from the account's public zone name (a private zone shadows a same-named public zone inside the VPC); use a `*.internal` name. Set in `cds-infra-deploy`. |
 | `bastion_target_sg_ssm_path` | `string` | `""` | SSM path for the bastion target SG ID. When set, attaches the SG so the EC2 accepts SSH from the bastion. Leave empty to skip. |
 | `aws_region` | `string` | `us-west-2` | AWS region. |
 | `partition` | `string` | `aws` | AWS partition. |

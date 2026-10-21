@@ -95,12 +95,6 @@ variable "repo_branch" {
   default     = "main"
 }
 
-variable "private_zone_name" {
-  description = "Name of the Route53 private hosted zone (attached to vpc_id) that holds the Logstash EC2's A record. Required when manage_ec2_instance = true. Must differ from the account's public zone name, which a private zone would shadow inside the VPC (e.g. use a *.internal name)."
-  type        = string
-  default     = ""
-}
-
 variable "bastion_target_sg_ssm_path" {
   description = "SSM parameter path for the bastion target SG ID. When set, the SG is attached to the Logstash EC2 to allow SSH from the bastion. Leave empty to skip."
   type        = string

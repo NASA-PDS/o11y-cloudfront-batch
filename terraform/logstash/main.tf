@@ -64,40 +64,25 @@ module "ec2" {
 
 
 # ---------------------------------------------------------------------------
-# Private DNS — the Logstash EC2 stays private behind the bastion, so its name
-# lives in a Route53 *private* hosted zone attached to the bastion's VPC. The
-# record resolves only inside that VPC (e.g. from the bastion), never publicly.
-#
-# var.private_zone_name must NOT equal the account's public zone name: a private
-# zone shadows a same-named public zone for the whole VPC, hiding its records
-# (including the bastion's). Use a distinct name, e.g. a *.internal domain.
-#
-# The A record name matches the ec2 Name tag, so the SSH target and instance
-# name are the same. Only created when this module manages the EC2
+# DNS - A record in the existing hosted zone (published by the account
+# baseline at /pds/hosted-zone/name), the same zone as the bastion host. The
+# record name matches the ec2 Name tag, so the SSH target and instance name
+# are the same. Only created when this module manages the EC2
 # (manage_ec2_instance = true).
 # ---------------------------------------------------------------------------
-resource "aws_route53_zone" "private" {
-  count   = var.manage_ec2_instance ? 1 : 0
-  name    = var.private_zone_name
-  comment = "Private zone for o11y-cloudfront-batch EC2s - resolves inside the VPC only"
+data "aws_ssm_parameter" "hosted_zone_name" {
+  count = var.manage_ec2_instance ? 1 : 0
+  name  = "/pds/hosted-zone/name"
+}
 
-  vpc {
-    vpc_id = var.vpc_id
-  }
-
-  tags = local.logstash_tags
-
-  lifecycle {
-    precondition {
-      condition     = length(var.private_zone_name) > 0
-      error_message = "private_zone_name must be set when manage_ec2_instance = true."
-    }
-  }
+data "aws_route53_zone" "main" {
+  count = var.manage_ec2_instance ? 1 : 0
+  name  = data.aws_ssm_parameter.hosted_zone_name[0].value
 }
 
 resource "aws_route53_record" "logstash" {
   count   = var.manage_ec2_instance ? 1 : 0
-  zone_id = aws_route53_zone.private[0].zone_id
+  zone_id = data.aws_route53_zone.main[0].zone_id
   name    = local.ec2_name
   type    = "A"
   ttl     = 30
