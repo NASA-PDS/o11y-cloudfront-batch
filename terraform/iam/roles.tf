@@ -7,7 +7,7 @@
 # Do NOT add aws_ssm_parameter resources here - they are already created by the
 # module and adding them again will conflict on apply.
 module "ec2_instance_role" {
-  source = "git@github.com:NASA-PDS/pdc-tf-modules.git//terraform/modules/iam/roles/ec2?ref=main"
+  source = "git@github.com:NASA-PDS/pdc-tf-modules.git//terraform/modules/iam/roles/ec2?ref=develop"
 
   venue                       = var.venue
   component                   = var.component
