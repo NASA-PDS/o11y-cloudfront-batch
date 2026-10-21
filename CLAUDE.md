@@ -255,23 +255,27 @@ at startup from `/etc/logstash/env` (loaded by the systemd unit), not at build t
 
 ### Connecting to the Logstash EC2
 
-Two access paths. SSH through the bastion lands you as your own user (your key
-must be enrolled in the `ec2users` DynamoDB table); SSM lands you as `ssm-user`.
-Either way, switch to `pdsops` afterwards:
+Everyone connects through the bastion (required). SSH to the bastion with your
+NASA ID, then to the EC2 with the same ID (the AMI checks it against the
+`ec2users` DynamoDB table on every login), then `sudo -iu pdsops`. SSM (lands as
+`ssm-user`) is limited to system administrators in prod and also available to
+developers in dev; switch to `pdsops` the same way. `logstash_fqdn` is published
+only for Terraform-created EC2s (all venues); for an externally managed EC2 use
+its hostname.
 
 ```bash
-# Via bastion (preferred):
+# Via bastion:
 NASA_ID="<nasa-id>"
 FQDN=$(aws ssm get-parameter --name /pds/o11y-cloudfront-batch/ec2/logstash_fqdn \
   --query Parameter.Value --output text)
 ZONE=$(aws ssm get-parameter --name /pds/hosted-zone/name \
   --query Parameter.Value --output text)
 ssh ${NASA_ID}@pds-cds-bastion-core.${ZONE}
-# then from the bastion:
+# then from the bastion (set FQDN to the value looked up above):
 ssh ${NASA_ID}@${FQDN}
 sudo -iu pdsops
 
-# Via SSM (no bastion required):
+# Via SSM (system administrators; developers in dev only):
 INSTANCE_ID=$(aws ssm get-parameter \
   --name /pds/o11y-cloudfront-batch/ec2/logstash_instance_id \
   --query Parameter.Value --output text)
@@ -292,18 +296,17 @@ automatically (Logstash install + pdsops account setup). No root step
 needed. Wait a few minutes after `task apply`, then connect as `pdsops`
 and run `logstash-deploy.sh`.
 
-**Existing/external EC2s (`manage_ec2_instance = false`):** run the
-bootstrap script as root once first:
+**Externally managed EC2s (`manage_ec2_instance = false`):** a system administrator
+(SSM) runs the bootstrap script as root once first:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/NASA-PDS/o11y-cloudfront-batch/main/scripts/logstash-bootstrap.sh \
   | sudo LOGSTASH_VERSION=8.18.0 bash
 ```
 
-**Operator step (no sudo, same for both cases):**
+**Operator step (as pdsops, no sudo, same for both cases):**
 
 ```bash
-sudo -iu pdsops
 S3_CF_BUCKET_NAME="<cf-logs-bucket-or-empty-string>"
 REPO_BRANCH=main
 export S3_CF_BUCKET_NAME REPO_BRANCH

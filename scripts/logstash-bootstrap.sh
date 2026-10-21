@@ -141,7 +141,7 @@ $PDSOPS_USER hard nofile 65536
 EOF
 
 # Defensive XDG_RUNTIME_DIR export — belt-and-suspenders in case whatever
-# session mechanism (SSM Run-As, runuser) doesn't set it via PAM/logind.
+# session mechanism (sudo -iu, runuser) does not set it via PAM/logind.
 for f in "$PDSOPS_HOME/.bash_profile" "$PDSOPS_HOME/.bashrc"; do
   touch "$f"
   if ! grep -q 'XDG_RUNTIME_DIR' "$f"; then

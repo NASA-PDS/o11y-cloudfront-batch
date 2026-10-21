@@ -1,11 +1,12 @@
 #!/bin/bash
 # Cloud-init userdata for the PDS Logstash EC2.
-# Runs as root at first boot — installs the SSM agent (sole access path),
-# then runs the full Logstash bootstrap: packages, Logstash RPM, plugins,
-# pdsops key-user account configuration, and the systemd --user unit.
+# Runs as root at first boot — installs the SSM agent (used by system
+# administrators, and by developers in dev), then runs the full Logstash
+# bootstrap: packages, Logstash RPM, plugins, pdsops key-user account
+# configuration, and the systemd --user unit.
 #
-# After this script completes an operator can SSM in (or SSH via the
-# bastion) as pdsops and run logstash-deploy.sh with no sudo required.
+# After this script completes an operator can SSH in via the bastion, run
+# `sudo -iu pdsops`, and run logstash-deploy.sh with no further sudo.
 #
 # Output is tee'd to /var/log/logstash-bootstrap.log and also captured
 # by cloud-init at /var/log/cloud-init-output.log.
@@ -26,7 +27,7 @@ echo "Logstash version : $LOGSTASH_VERSION"
 echo "Started          : $(date -u)"
 
 # ----------------------------------------
-# 1. SSM agent — must succeed, it is the only access path
+# 1. SSM agent — must succeed, it is the system administrator access path
 # ----------------------------------------
 echo "--- Installing SSM agent ---"
 SSM_RPM="https://s3.${aws_region}.amazonaws.com/amazon-ssm-${aws_region}/latest/linux_amd64/amazon-ssm-agent.rpm"
@@ -126,7 +127,7 @@ $PDSOPS_USER hard nofile 65536
 EOF
 
 # Ensure XDG_RUNTIME_DIR is set in interactive sessions — belt-and-suspenders
-# for SSM Run-As and sudo -iu sessions that may not set it via PAM/logind.
+# for `sudo -iu pdsops` sessions that may not set it via PAM/logind.
 for f in "$PDSOPS_HOME/.bash_profile" "$PDSOPS_HOME/.bashrc"; do
   touch "$f"
   if ! grep -q 'XDG_RUNTIME_DIR' "$f"; then

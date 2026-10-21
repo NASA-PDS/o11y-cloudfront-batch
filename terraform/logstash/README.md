@@ -6,63 +6,66 @@ Reads the S3 bucket name and OpenSearch endpoint from SSM at plan time — deplo
 
 EC2 creation is optional (`manage_ec2_instance`, default `true`).
 
-**Production uses `manage_ec2_instance = false`** — Logstash runs on an
-existing EC2 managed outside Terraform. In that mode this module only
-creates the SSM Run-As document and publishes SSM parameter outputs; it
-never touches the EC2.
-See ["Using an existing EC2"](#using-an-existing-ec2-manage_ec2_instance--false)
-below.
+Every venue, including prod, creates its own EC2. Setting
+`manage_ec2_instance = false` instead points the module at an existing,
+externally managed EC2; in that mode it only publishes SSM parameter outputs and
+never touches the EC2. See
+["Using an existing EC2"](#using-an-existing-ec2-manage_ec2_instance--false) below.
 
 > **Requires `iam:PassRole`** — must be applied by a system administrator.
 
 ## Resources
 
-- `module.ec2` (from `pdc-tf-modules//terraform/modules/ec2`) — EC2 instance, only created when `manage_ec2_instance = true`; userdata runs the full bootstrap at first boot (Logstash RPM + plugins, pdsops account setup, systemd unit) — no manual root step required. Access via SSM and SSH through the bastion.
+- `module.ec2` (from `pdc-tf-modules//terraform/modules/ec2`) — EC2 instance, only created when `manage_ec2_instance = true`; userdata runs the full bootstrap at first boot (Logstash RPM + plugins, pdsops account setup, systemd unit) — no manual root step required. Attaches the bastion target security group (`bastion_target_sg_ssm_path`, required).
 - `aws_route53_record.logstash` — A record in the existing hosted zone (SSM `/pds/hosted-zone/name`, same zone as the bastion) pointing to the EC2 private IP; name matches the EC2 `Name` tag. Only created when `manage_ec2_instance = true`.
-- `aws_ssm_document.logstash_runas` — custom SSM Session document (Run-As `pdsops`) so operators never need sudo for day-2 ops; always created, works against any instance (created here or existing)
-- `aws_ssm_parameter.logstash_instance_id` — publishes the instance ID (created, or `existing_instance_id`) to `/pds/o11y-cloudfront-batch/ec2/logstash_instance_id`
-- `aws_ssm_parameter.logstash_runas_document` — publishes the Run-As document name to `/pds/o11y-cloudfront-batch/ssm/logstash_runas_document`
+- `aws_ssm_parameter.logstash_instance_id` — publishes the instance ID (created, or `existing_instance_id`) to `/pds/o11y-cloudfront-batch/ec2/logstash_instance_id` (SSM session target for system administrators, and for developers in dev)
 - `aws_ssm_parameter.logstash_fqdn` — publishes the Route53 FQDN to `/pds/o11y-cloudfront-batch/ec2/logstash_fqdn` (SSH target via bastion). Only created when `manage_ec2_instance = true`.
 
 ### Access model
 
-Two access paths are available:
-
-**SSH via bastion (preferred for interactive work):** The EC2 has the bastion
-target security group attached (`bastion_target_sg_ssm_path`) and a Route53 A
-record in the shared hosted zone. The instance has only a private IP, so
-SSH to the bastion first and hop from there:
+**Everyone connects through the bastion host.** The EC2 has only a private IP
+and carries the bastion target security group, so SSH to the bastion first and
+hop from there. SSH to the bastion with your NASA ID, then to the EC2 with the same
+ID; the AMI checks it against the user-key store (DynamoDB) on every login, so your
+key must be enrolled. Once on the EC2, switch to the shared `pdsops` key-user
+account, which owns Logstash.
 
 ```bash
+# On your workstation: look up the hostnames.
+NASA_ID="<nasa-id>"
 ZONE=$(aws ssm get-parameter --name /pds/hosted-zone/name \
   --query Parameter.Value --output text)
 FQDN=$(aws ssm get-parameter \
   --name /pds/o11y-cloudfront-batch/ec2/logstash_fqdn \
   --query Parameter.Value --output text)
-NASA_ID="<nasa-id>"
+echo "Target: ${FQDN}"
 ssh ${NASA_ID}@pds-cds-bastion-core.${ZONE}
-# then from the bastion:
+
+# On the bastion: set FQDN to the Target value printed above.
+FQDN="<target-fqdn>"
 ssh ${NASA_ID}@${FQDN}
 sudo -iu pdsops
 ```
 
-**SSM Session Manager (no bastion required):** `aws_ssm_document.logstash_runas`
-exists so a session started with `--document-name` set to it *can* land
-directly as `pdsops` — but that requires an IAM grant (`ssm:StartSession` on
-the document's ARN) that may not be provisioned. **In practice, expect
-`aws ssm start-session` to land you as `root`** and switch explicitly:
+`logstash_fqdn` is published only when this module creates the EC2. For an
+externally managed EC2, use its hostname.
+
+**SSM Session Manager** is limited to system administrators in prod. In dev it
+is also available to developers. Sessions land as `ssm-user`; switch to `pdsops`:
 
 ```bash
+INSTANCE_ID=$(aws ssm get-parameter \
+  --name /pds/o11y-cloudfront-batch/ec2/logstash_instance_id \
+  --query Parameter.Value --output text)
+aws ssm start-session --target ${INSTANCE_ID}
 sudo -iu pdsops
 ```
 
-From either path, execution, logging, monitoring, and git-based config updates
-are all done as `pdsops` with **no sudo**. No root step is needed after first
-boot — userdata handles the full bootstrap automatically.
-
-> Granting operators `ssm:StartSession` on the `logstash_runas` document's
-> ARN is an IAM/SSO concern outside this repo. Until/unless that's granted,
-> `sudo -iu pdsops` after connecting is the reliable fallback.
+Running, updating, and monitoring Logstash are all done as `pdsops` with no
+further sudo. Root is needed only for the one-time install: userdata does it on a
+Terraform-created EC2, and a system administrator does it on an externally managed
+EC2 (`logstash-bootstrap.sh`, also used for Logstash version upgrades there).
+On a Terraform-created EC2 a version upgrade replaces the instance.
 
 ## SSM dependencies (read at plan time)
 
@@ -88,7 +91,7 @@ Deploy `iam`, `s3`, and the o11y-platform OpenSearch module before applying this
 | `logstash_instance_type` | `string` | `t3.large` | EC2 instance type. Only used when `manage_ec2_instance = true`. |
 | `logstash_root_volume_size` | `number` | `50` | Root volume size in GB. Must be >= the AMI root snapshot size (32 GB). Only used when `manage_ec2_instance = true`. |
 | `logstash_version` | `string` | `8.18.0` | Logstash RPM version to install (baked into userdata at apply time). |
-| `bastion_target_sg_ssm_path` | `string` | `""` | SSM path for the bastion target SG ID. When set, attaches the SG so the EC2 accepts SSH from the bastion. Leave empty to skip. |
+| `bastion_target_sg_ssm_path` | `string` | `""` | SSM path for the bastion target SG ID, attached so the EC2 accepts SSH from the bastion. Required when `manage_ec2_instance = true`. |
 | `aws_region` | `string` | `us-west-2` | AWS region. |
 | `partition` | `string` | `aws` | AWS partition. |
 | `venue` | `string` | — | Deployment venue (`dev`, `test`, `prod`). |
@@ -102,7 +105,6 @@ Deploy `iam`, `s3`, and the o11y-platform OpenSearch module before applying this
 | Name | Description |
 |---|---|
 | `logstash_instance_id` | EC2 instance ID of the Logstash instance. |
-| `logstash_ssm_document_name` | Pass as `--document-name` to land an SSM session as the `pdsops` user (no sudo). |
 | `logstash_fqdn` | Route53 FQDN of the Logstash EC2 (SSH target via bastion). Null when `manage_ec2_instance = false`. |
 
 ## Deploy
@@ -116,31 +118,30 @@ task apply VENUE=dev COMPONENT=o11y-cloudfront-batch/logstash
 
 ## Using an existing EC2 (`manage_ec2_instance = false`)
 
-Production is configured in `cds-infra-deploy/venues/prod/o11y-cloudfront-batch/logstash/terragrunt.hcl`
-with `manage_ec2_instance = false` and `existing_instance_id` set to the prod instance.
+Set `manage_ec2_instance = false` and `existing_instance_id` in the venue's Terragrunt
+inputs. `task apply` then only publishes
+`/pds/o11y-cloudfront-batch/ec2/logstash_instance_id` (from `existing_instance_id`) —
+it never provisions, modifies, or destroys the EC2 itself, and `logstash_fqdn` is not
+published.
 
-`task apply VENUE=prod COMPONENT=o11y-cloudfront-batch/logstash` then only creates/updates
-the SSM Run-As document and publishes `/pds/o11y-cloudfront-batch/ec2/logstash_instance_id`
-(from `existing_instance_id`) — it never provisions, modifies, or destroys the EC2 itself.
-
-**Connecting to the box is entirely outside this module's control.** These
-instructions work regardless of *how* you get a root shell — an SSM
-session, a locked-down bastion/gateway with SSH, port-forwarding, whatever
-your SA team configures for that instance. `aws_ssm_document.logstash_runas`
-is created either way and is one option if SSM access is available, but
-nothing here depends on it.
+Operators reach the box through the bastion ([Access model](#access-model)).
+Root-level steps (`logstash-bootstrap.sh`) are performed by a system
+administrator, who can use SSM.
 
 ### Prerequisites on the existing EC2 (outside this module's control)
 
 - Oracle Linux 9 (PDS Cloud AMI), or another systemd-based RPM distro
   (`dnf`, `systemd --user`, `loginctl enable-linger` all need to work)
-- Root (or sudo-capable) access to run `scripts/logstash-bootstrap.sh` once
-  for Logstash install and pdsops account setup (this step is automated by
-  userdata on Terraform-created instances)
+- The bastion target security group attached, and operator SSH keys enrolled
+  for bastion access
+- A DNS name in the shared hosted zone (or another hostname operators can
+  reach from the bastion) for the EC2
+- A system administrator to run `scripts/logstash-bootstrap.sh` as root once
+  for Logstash install and pdsops account setup (automated by userdata on
+  Terraform-created instances)
 - Instance profile with the app-level S3 + OpenSearch policy from
-  [`../iam`](../iam) (the same role this
-  module reads for `ec2_role_arn`) — plus SSM connectivity
-  (`AmazonSSMManagedInstanceCore`) if SSM access will be used at all
+  [`../iam`](../iam) (the same role this module reads for `ec2_role_arn`),
+  plus `AmazonSSMManagedInstanceCore` so system administrators can use SSM
 
 ### First-boot setup
 
@@ -157,26 +158,7 @@ follow the operator steps below.
 **Operator steps (no sudo, same for both cases):**
 
 ```bash
-# 1. Connect as pdsops.
-#    Via bastion (preferred):
-FQDN=$(aws ssm get-parameter \
-  --name /pds/o11y-cloudfront-batch/ec2/logstash_fqdn \
-  --query Parameter.Value --output text)
-ZONE=$(aws ssm get-parameter \
-  --name /pds/hosted-zone/name \
-  --query Parameter.Value --output text)
-NASA_ID="<nasa-id>"
-ssh ${NASA_ID}@pds-cds-bastion-core.${ZONE}
-# then from the bastion:
-ssh ${NASA_ID}@${FQDN}
-sudo -iu pdsops
-
-#    Via SSM (no bastion required):
-INSTANCE_ID=$(aws ssm get-parameter \
-  --name /pds/o11y-cloudfront-batch/ec2/logstash_instance_id \
-  --query Parameter.Value --output text)
-aws ssm start-session --target ${INSTANCE_ID}
-sudo -iu pdsops
+# 1. Connect through the bastion and switch to pdsops (see Access model).
 
 # 2. Deploy config and start the service.
 #    ALWAYS set S3_CF_BUCKET_NAME on a first-time deploy (use "" if EN
@@ -188,7 +170,7 @@ EGRESS_REPORT_RECIPIENTS="<comma-separated-recipients>"
 export S3_CF_BUCKET_NAME REPO_BRANCH EGRESS_REPORT_RECIPIENTS
 bash <(curl -fsSL https://raw.githubusercontent.com/NASA-PDS/o11y-cloudfront-batch/main/scripts/logstash-deploy.sh)
 
-# 3. Verify
+# 3. Verify (see "Verify the deployment" below)
 systemctl --user status logstash
 ```
 
@@ -196,7 +178,7 @@ On a venue with a large initial S3 backlog, consider staging the rollout in
 step 2 instead: set `ENABLED_NODES=en` (comma/space-separated node IDs) so
 only EN's pipeline runs at first, then redeploy later with `ENABLED_NODES`
 unset to bring the rest of the nodes online once EN has caught up. See
-[`../../README.md`](../../README.md#deploying-with-a-subset-of-nodes) for
+[`../../docs/operations.md`](../../docs/operations.md#deploying-with-a-subset-of-nodes) for
 details.
 
 `EGRESS_REPORT_RECIPIENTS` in step 2 is **required to enable the daily
@@ -204,7 +186,7 @@ egress report cron job** — `logstash-deploy.sh` skips installing it silently
 if unset. SMTP credentials are read from a local file on the EC2
 (`/etc/logstash/smtp.env` by default, override with `SMTP_ENV_FILE`) — no
 extra AWS permissions needed. Create that file once by hand before (or
-after) this step; see [`../../README.md`](../../README.md#quick-reference-from-an-ssm-session-on-the-ec2-as-the-pdsops-user)
+after) this step; see [`../../docs/operations.md`](../../docs/operations.md)
 for the exact format and the full list of egress-report env vars. (SSM is
 also supported as a fallback via `SMTP_CONFIG_SSM_KEY_PATH`, but requires an
 IAM grant this module doesn't provision by default — the local file avoids
@@ -212,13 +194,59 @@ that entirely.)
 
 ### Day-2 operations — no sudo
 
-Connect as `pdsops` via bastion SSH or SSM (same as above). Then:
+Connect as `pdsops` ([Access model](#access-model)). Then:
 - `bash scripts/logstash-deploy.sh` — pull latest config and restart
 - `systemctl --user restart logstash` — restart without config change
 - `tail -f /var/log/logstash/logstash-plain.log` — live logs
 
-See the root [`README.md`](../../README.md) Quick Reference for the full list.
+See the [Operations Runbook](../../docs/operations.md) for the full list.
 
 The only operation that ever requires root again is running
 `scripts/logstash-bootstrap.sh` for a deliberate admin action such as a
 Logstash version upgrade on an existing instance.
+
+## Verify the deployment
+
+Run these on the EC2 as `pdsops`.
+
+**1. Instance is up and bootstrapped** (Logstash installed, `pdsops` configured):
+
+```bash
+rpm -q logstash
+grep "Bootstrap complete" /var/log/logstash-bootstrap.log
+loginctl show-user pdsops --property=Linger
+```
+
+`rpm -q` prints the installed version. `Linger=yes` confirms the
+`systemd --user` service survives logouts. The bootstrap log exists on
+Terraform-created instances only (on an existing EC2, `logstash-bootstrap.sh`
+prints `=== Bootstrap complete ===` to the console). If a check fails on a
+Terraform-created instance, read `/var/log/logstash-bootstrap.log` and
+`/var/log/cloud-init-output.log`.
+
+**2. Config is deployed and the service is running** (after `logstash-deploy.sh`):
+
+```bash
+systemctl --user is-active logstash
+ls /etc/logstash/pipelines/
+tail -n 20 /var/log/logstash/logstash-plain.log
+```
+
+`logstash-deploy.sh` refuses to run if Logstash is not installed, so a
+completed deploy confirms the install.
+
+**3. One command for all of the above plus AWS connectivity** (after `logstash-deploy.sh`):
+
+```bash
+bash /opt/o11y-cloudfront-batch/scripts/smoke-test.sh
+```
+
+It checks the Logstash RPM, linger, deployed pipeline configs, S3 access,
+OpenSearch reachability and SigV4 auth, and the service state, and exits
+non-zero if any check fails. OpenSearch `status=green` is expected; `yellow` is
+acceptable on a single-node dev cluster. To confirm data is landing, run
+`scripts/os-doc-counts.sh` (see the
+[Operations Runbook](../../docs/operations.md#monitoring)).
+
+**Before deploying**, test pipeline changes locally with the Docker suite in
+[`tests/README.md`](../../tests/README.md) (`docker compose run --rm test`).

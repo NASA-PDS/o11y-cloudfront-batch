@@ -43,7 +43,7 @@
 #                              recommended source — no AWS permissions needed
 #                              beyond reading a file already on disk. Create
 #                              it once by hand (mode 600, owned by logstash);
-#                              see README.md "Enable/update the daily egress
+#                              see docs/operations.md "Enable/update the daily egress
 #                              report email".
 #   SMTP_CONFIG_SSM_KEY_PATH — SSM path prefix holding SMTP creds instead of
 #                              a local file — only used as a fallback if
@@ -72,7 +72,7 @@ INDEX_PREFIX="${INDEX_PREFIX:-pds-weblogs}"
 # silently defaulting to empty -- an empty bucket name templates into the EN
 # CloudFront pipeline as `bucket => ""`, which fails at Logstash runtime with
 # a confusing "not authorized to perform: s3:ListAllMyBuckets" AccessDenied
-# error rather than a clear "bucket not set" message. See README.md
+# error rather than a clear "bucket not set" message. See docs/operations.md
 # Troubleshooting > Common Issues.
 if [ -z "${S3_CF_BUCKET_NAME:-}" ] && [ -f "$LOGSTASH_CONFIG_DIR/env" ]; then
   S3_CF_BUCKET_NAME="$(grep -E '^S3_CF_BUCKET_NAME=' "$LOGSTASH_CONFIG_DIR/env" | tail -1 | cut -d= -f2-)"
@@ -208,7 +208,7 @@ else
   if [ ! -f "$SMTP_ENV_FILE" ] && [ -z "$SMTP_CONFIG_SSM_KEY_PATH" ]; then
     echo "WARNING: $SMTP_ENV_FILE does not exist and SMTP_CONFIG_SSM_KEY_PATH is not set — the cron"
     echo "job will be installed but will fail until you create $SMTP_ENV_FILE (mode 600, owned by"
-    echo "logstash) with username/password/server/sender lines. See README.md 'Enable/update the"
+    echo "logstash) with username/password/server/sender lines. See docs/operations.md 'Enable/update the"
     echo "daily egress report email'."
   fi
   PYTHON_BIN="$(command -v python3.13 2>/dev/null || echo python3)"

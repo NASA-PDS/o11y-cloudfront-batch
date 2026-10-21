@@ -1,14 +1,52 @@
 #!/bin/bash
-# smoke-test.sh — Verify S3, OpenSearch, and Logstash are all reachable and auth works.
+# smoke-test.sh — Verify Logstash is installed and running, and that S3 and
+# OpenSearch are reachable and auth works.
 # Run from the Logstash EC2 after deployment, as the pdsops user (no sudo).
+# Exits non-zero if any check fails.
 #
 # Usage:
 #   bash /opt/o11y-cloudfront-batch/scripts/smoke-test.sh
 
 set -euo pipefail
 
+FAILED=0
+
+# bcheck <label> <command...> — PASS/FAIL line from a command's output and exit status.
+bcheck() {
+  local label="$1" out
+  shift
+  if out="$("$@" 2>&1)"; then
+    echo "  PASS  ${label}: ${out}"
+  else
+    echo "  FAIL  ${label}: ${out}"
+    FAILED=1
+  fi
+}
+
+linger_enabled() {
+  local v
+  v="$(loginctl show-user "$(id -un)" --property=Linger --value)"
+  echo "Linger=${v}"
+  [ "$v" = "yes" ]
+}
+
+pipelines_present() {
+  local n
+  n="$(find /etc/logstash/pipelines -maxdepth 1 -name '*.conf' 2>/dev/null | wc -l | tr -d ' ')"
+  echo "${n} pipeline config(s) in /etc/logstash/pipelines"
+  [ "$n" -gt 0 ]
+}
+
+echo "--- Logstash install ---"
+bcheck "Logstash RPM installed" rpm -q logstash
+bcheck "systemd --user linger enabled" linger_enabled
+bcheck "Pipeline configs deployed" pipelines_present
+
+echo ""
+echo "--- AWS connectivity ---"
+PY_RC=0
 PYTHON_BIN="$(command -v python3.13 2>/dev/null || echo python3)"
-"$PYTHON_BIN" - <<'EOF'
+"$PYTHON_BIN" - <<'EOF' || PY_RC=$?
 import boto3, json, sys
 from botocore.auth import SigV4Auth
 from botocore.awsrequest import AWSRequest
@@ -63,5 +101,13 @@ EOF
 
 echo ""
 echo "--- Logstash service ---"
-systemctl --user is-active logstash && echo "logstash: active" || echo "logstash: INACTIVE"
-tail -n 5 /var/log/logstash/logstash-plain.log
+bcheck "Logstash service active" systemctl --user is-active logstash
+tail -n 5 /var/log/logstash/logstash-plain.log || true
+
+echo ""
+if [ "$PY_RC" -eq 0 ] && [ "$FAILED" -eq 0 ]; then
+  echo "Smoke test passed."
+else
+  echo "Smoke test FAILED - see FAIL lines above."
+  exit 1
+fi

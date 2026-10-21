@@ -41,7 +41,7 @@ variable "resource_prefix" {
 }
 
 variable "manage_ec2_instance" {
-  description = "Whether this module creates the Logstash EC2 instance. Set to false to reuse an existing, externally-managed EC2 (e.g. production) — see existing_instance_id and terraform/logstash/README.md 'Using an existing EC2'."
+  description = "Whether this module creates the Logstash EC2 instance. Set to false to reuse an existing, externally-managed EC2 - see existing_instance_id and terraform/logstash/README.md 'Using an existing EC2'."
   type        = bool
   default     = true
 }
@@ -102,7 +102,12 @@ variable "repo_branch" {
 }
 
 variable "bastion_target_sg_ssm_path" {
-  description = "SSM parameter path for the bastion target SG ID. When set, the SG is attached to the Logstash EC2 to allow SSH from the bastion. Leave empty to skip."
+  description = "SSM parameter path for the bastion target SG ID. The SG is attached to the Logstash EC2 so it accepts SSH from the bastion. Required when manage_ec2_instance = true; ignored otherwise (an existing EC2 must already accept SSH from the bastion)."
   type        = string
   default     = ""
+
+  validation {
+    condition     = !var.manage_ec2_instance || length(var.bastion_target_sg_ssm_path) > 0
+    error_message = "bastion_target_sg_ssm_path must be set when manage_ec2_instance = true."
+  }
 }
