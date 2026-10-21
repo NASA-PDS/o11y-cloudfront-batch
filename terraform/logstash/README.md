@@ -71,9 +71,9 @@ boot — userdata handles the full bootstrap automatically.
 |---|---|
 | `/pds/o11y-cloudfront-batch/s3/bucket_name` | `s3` module |
 | `/pds/o11y-platform/opensearch/opensearch_endpoint` | `o11y-platform` repo |
-| `/pds/o11y-cloudfront-batch/iam/roles/ec2/instance-profile-name` | `iam/roles` module |
+| `/pds/o11y-cloudfront-batch/iam/roles/ec2/instance-profile-name` | `iam` module |
 
-Deploy `iam/roles`, `s3`, and the o11y-platform OpenSearch module before applying this module.
+Deploy `iam`, `s3`, and the o11y-platform OpenSearch module before applying this module.
 
 ## Inputs
 
@@ -139,7 +139,7 @@ nothing here depends on it.
   for Logstash install and pdsops account setup (this step is automated by
   userdata on Terraform-created instances)
 - Instance profile with the app-level S3 + OpenSearch policy from
-  [`../iam/policies`](../iam/policies) (the same `ec2_role_name` this
+  [`../iam`](../iam) (the same role this
   module reads for `ec2_role_arn`) — plus SSM connectivity
   (`AmazonSSMManagedInstanceCore`) if SSM access will be used at all
 

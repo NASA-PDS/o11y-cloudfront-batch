@@ -6,9 +6,9 @@
 # manual root step is needed after first boot.
 #
 # Access: SSH via the CDS bastion host, or AWS Systems Manager.
-# Instance role is managed separately in terraform/iam/roles/ and its
+# Instance role is managed separately in terraform/iam/ and its
 # profile name is read from SSM at /pds/<component>/iam/roles/ec2/instance-profile-name
-# (published by the iam/roles module after apply).
+# (published by the iam module after apply).
 #
 # EC2 creation is optional (var.manage_ec2_instance, default true) — set to
 # false to point this module at an existing, externally-managed EC2 (e.g.

@@ -10,7 +10,7 @@ data "aws_ssm_parameter" "opensearch_endpoint" {
   name = "/pds/o11y-platform/opensearch/opensearch_endpoint"
 }
 
-# Reads the EC2 instance profile name published by terraform/iam/roles/.
+# Reads the EC2 instance profile name published by terraform/iam/.
 data "aws_ssm_parameter" "ec2_instance_profile_name" {
   name = "/pds/${var.component}/iam/roles/ec2/instance-profile-name"
 }
