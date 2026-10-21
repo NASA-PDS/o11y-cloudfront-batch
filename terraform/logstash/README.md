@@ -86,6 +86,7 @@ Deploy `iam`, `s3`, and the o11y-platform OpenSearch module before applying this
 | `resource_prefix` | `string` | — | Prefix for all resource names (e.g. `pds-dev`). No CI/CD identifiers. |
 | `s3_cf_bucket_name` | `string` | `""` | S3 bucket containing CloudFront logs (EN node only). Leave empty to skip. |
 | `logstash_instance_type` | `string` | `t3.large` | EC2 instance type. Only used when `manage_ec2_instance = true`. |
+| `logstash_root_volume_size` | `number` | `50` | Root volume size in GB. Must be >= the AMI root snapshot size (32 GB). Only used when `manage_ec2_instance = true`. |
 | `logstash_version` | `string` | `8.18.0` | Logstash RPM version to install (baked into userdata at apply time). |
 | `bastion_target_sg_ssm_path` | `string` | `""` | SSM path for the bastion target SG ID. When set, attaches the SG so the EC2 accepts SSH from the bastion. Leave empty to skip. |
 | `aws_region` | `string` | `us-west-2` | AWS region. |

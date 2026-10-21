@@ -71,6 +71,12 @@ variable "logstash_instance_type" {
   default     = "t3.large"
 }
 
+variable "logstash_root_volume_size" {
+  description = "Root volume size in GB for the Logstash instance. Must be >= the AMI root snapshot size (32 GB)."
+  type        = number
+  default     = 50
+}
+
 variable "logstash_version" {
   description = "Logstash RPM version to install"
   type        = string
