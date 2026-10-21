@@ -33,7 +33,7 @@ locals {
 }
 
 module "ec2" {
-  source = "git@github.com:NASA-PDS/pdc-tf-modules.git//terraform/modules/ec2?ref=develop"
+  source = "git@github.com:NASA-PDS/pdc-tf-modules.git//terraform/modules/ec2?ref=feature/ec2-instance-type-in-place-resize"
   count  = var.manage_ec2_instance ? 1 : 0
 
   ami_id                     = var.ami_id
