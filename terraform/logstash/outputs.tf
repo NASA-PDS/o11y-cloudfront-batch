@@ -2,8 +2,8 @@
 resource "aws_ssm_parameter" "logstash_instance_id" {
   name        = "/pds/o11y-cloudfront-batch/ec2/logstash_instance_id"
   type        = "String"
-  value       = var.manage_ec2_instance ? module.ec2[0].ec2_instance_id[0] : var.existing_instance_id
-  description = "Instance ID of the o11y-cloudfront-batch Logstash EC2 (created by this module, or an existing instance when manage_ec2_instance = false)"
+  value       = var.manage_ec2_instance ? module.ec2[0].instance_ids[local.ec2_name] : var.existing_instance_id
+  description = "Instance ID of the o11y-cloudfront-batch Logstash EC2 (created by this module, or an existing instance when manage_ec2_instance = false). SSM session target for system administrators (and developers in dev)."
 
   lifecycle {
     precondition {
@@ -13,11 +13,20 @@ resource "aws_ssm_parameter" "logstash_instance_id" {
   }
 }
 
-resource "aws_ssm_parameter" "logstash_runas_document" {
-  name        = "/pds/o11y-cloudfront-batch/ssm/logstash_runas_document"
+resource "aws_ssm_parameter" "logstash_fqdn" {
+  count       = var.manage_ec2_instance ? 1 : 0
+  name        = "/pds/o11y-cloudfront-batch/ec2/logstash_fqdn"
   type        = "String"
-  value       = aws_ssm_document.logstash_runas.name
-  description = "SSM document name to pass as --document-name for a Run-As session landing as the pdsops user (no sudo)"
+  value       = aws_route53_record.logstash[0].fqdn
+  description = "FQDN of the Logstash EC2 in the shared hosted zone (SSH target from the bastion)"
+}
+
+resource "aws_ssm_parameter" "logstash_security_group_id" {
+  count       = var.manage_ec2_instance ? 1 : 0
+  name        = "/pds/o11y-cloudfront-batch/ec2/logstash_security_group_id"
+  type        = "String"
+  value       = aws_security_group.logstash[0].id
+  description = "Security group ID of the Logstash EC2. Read by o11y-platform's opensearch module to allow HTTPS from Logstash"
 }
 
 output "logstash_instance_id" {
@@ -26,7 +35,7 @@ output "logstash_instance_id" {
   sensitive   = true
 }
 
-output "logstash_ssm_document_name" {
-  value       = aws_ssm_document.logstash_runas.name
-  description = "Pass as --document-name to land an SSM session as the pdsops user (no sudo)"
+output "logstash_fqdn" {
+  value       = var.manage_ec2_instance ? aws_route53_record.logstash[0].fqdn : null
+  description = "FQDN of the Logstash EC2 in the shared hosted zone. SSH to this from the bastion. Null when manage_ec2_instance = false."
 }

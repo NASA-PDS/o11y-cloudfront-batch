@@ -4,8 +4,8 @@
 # Modules and their deployment order:
 #   0. o11y-platform          - OpenSearch domain, bootstrapped with o11y_cloudfront_batch_enabled=false
 #                              (deploy first, separate repo)
-#   1. iam/policies/         - IAM policy + role attachment (admin required); publishes
-#                              ec2_role_arn to SSM
+#   1. iam/                  - EC2 role + profile, IAM policy + attachment (admin required);
+#                              publishes ec2_role_arn and instance profile name to SSM
 #   1.5. o11y-platform        - re-apply with o11y_cloudfront_batch_enabled=true (access-policy update
 #                              only, separate repo) — Logstash gets 403s from OpenSearch until
 #                              this runs
@@ -436,7 +436,7 @@ tasks:
             - terraform apply -refresh-only -var-file={{.TFVARS_COMMON}} -var-file={{.TFVARS_MODULE}} {{.CLI_ARGS}}
 
     # ------------------------------------------------------------------
-    # IAM: EC2 policy + role attachment (requires admin/elevated role)
+    # IAM: EC2 role + profile, policy + role attachment (requires admin/elevated role)
     # Run by a system administrator — Project-Power-User lacks iam:CreatePolicy.
     # Must be applied before logstash:deploy (EC2 needs the policy attached at launch).
     # ------------------------------------------------------------------
@@ -444,7 +444,7 @@ tasks:
     iam:init:
         desc: "Initialize IAM policies module Terraform (set TFSTATE_BUCKET env var or use cds-infra-deploy Terragrunt)"
         deps: [aws]
-        dir: iam/policies
+        dir: iam
         requires:
             vars:
                 - name: VENUE
@@ -457,14 +457,14 @@ tasks:
 
     iam:validate:
         desc: "Validate IAM policies module Terraform files"
-        dir: iam/policies
+        dir: iam
         cmds:
             - terraform validate -no-color
 
     iam:plan:
         desc: "Plan IAM policy changes (requires iam:CreatePolicy permissions)"
         deps: ["iam:init"]
-        dir: iam/policies
+        dir: iam
         requires:
             vars:
                 - name: VENUE
@@ -473,7 +473,7 @@ tasks:
             TFVARS_COMMON:
                 sh: |
                     if [ "{{.LOCAL}}" = "1" ]; then
-                        echo "../../tfvars/common-{{.VENUE}}.tfvars"
+                        echo "../tfvars/common-{{.VENUE}}.tfvars"
                     elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
                         echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/o11y-cloudfront-batch/common.tfvars"
                     else
@@ -485,7 +485,7 @@ tasks:
                     if [ "{{.LOCAL}}" = "1" ]; then
                         echo "tfvars/{{.VENUE}}.tfvars"
                     elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/o11y-cloudfront-batch/iam-policies.tfvars"
+                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/o11y-cloudfront-batch/iam.tfvars"
                     else
                         echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
                         exit 1
@@ -497,7 +497,7 @@ tasks:
         desc: "Deploy IAM policies and role attachments (requires admin role)"
         aliases: ["iam:apply"]
         deps: ["iam:init"]
-        dir: iam/policies
+        dir: iam
         requires:
             vars:
                 - name: VENUE
@@ -506,7 +506,7 @@ tasks:
             TFVARS_COMMON:
                 sh: |
                     if [ "{{.LOCAL}}" = "1" ]; then
-                        echo "../../tfvars/common-{{.VENUE}}.tfvars"
+                        echo "../tfvars/common-{{.VENUE}}.tfvars"
                     elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
                         echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/o11y-cloudfront-batch/common.tfvars"
                     else
@@ -518,7 +518,7 @@ tasks:
                     if [ "{{.LOCAL}}" = "1" ]; then
                         echo "tfvars/{{.VENUE}}.tfvars"
                     elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/o11y-cloudfront-batch/iam-policies.tfvars"
+                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/o11y-cloudfront-batch/iam.tfvars"
                     else
                         echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
                         exit 1
@@ -529,7 +529,7 @@ tasks:
     iam:destroy:
         desc: "Destroy IAM policies and role attachments"
         deps: ["iam:init"]
-        dir: iam/policies
+        dir: iam
         requires:
             vars:
                 - name: VENUE
@@ -538,7 +538,7 @@ tasks:
             TFVARS_COMMON:
                 sh: |
                     if [ "{{.LOCAL}}" = "1" ]; then
-                        echo "../../tfvars/common-{{.VENUE}}.tfvars"
+                        echo "../tfvars/common-{{.VENUE}}.tfvars"
                     elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
                         echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/o11y-cloudfront-batch/common.tfvars"
                     else
@@ -550,7 +550,7 @@ tasks:
                     if [ "{{.LOCAL}}" = "1" ]; then
                         echo "tfvars/{{.VENUE}}.tfvars"
                     elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/o11y-cloudfront-batch/iam-policies.tfvars"
+                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/o11y-cloudfront-batch/iam.tfvars"
                     else
                         echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
                         exit 1
@@ -561,7 +561,7 @@ tasks:
     iam:refresh:
         desc: "Refresh IAM policies module Terraform state"
         deps: ["iam:init"]
-        dir: iam/policies
+        dir: iam
         requires:
             vars:
                 - name: VENUE
@@ -570,7 +570,7 @@ tasks:
             TFVARS_COMMON:
                 sh: |
                     if [ "{{.LOCAL}}" = "1" ]; then
-                        echo "../../tfvars/common-{{.VENUE}}.tfvars"
+                        echo "../tfvars/common-{{.VENUE}}.tfvars"
                     elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
                         echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/o11y-cloudfront-batch/common.tfvars"
                     else
@@ -582,7 +582,7 @@ tasks:
                     if [ "{{.LOCAL}}" = "1" ]; then
                         echo "tfvars/{{.VENUE}}.tfvars"
                     elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/o11y-cloudfront-batch/iam-policies.tfvars"
+                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/o11y-cloudfront-batch/iam.tfvars"
                     else
                         echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
                         exit 1
@@ -593,7 +593,7 @@ tasks:
     iam:sync:
         desc: "Apply refresh-only to sync IAM state without changing infrastructure"
         deps: ["iam:init"]
-        dir: iam/policies
+        dir: iam
         requires:
             vars:
                 - name: VENUE
@@ -602,7 +602,7 @@ tasks:
             TFVARS_COMMON:
                 sh: |
                     if [ "{{.LOCAL}}" = "1" ]; then
-                        echo "../../tfvars/common-{{.VENUE}}.tfvars"
+                        echo "../tfvars/common-{{.VENUE}}.tfvars"
                     elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
                         echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/o11y-cloudfront-batch/common.tfvars"
                     else
@@ -614,7 +614,7 @@ tasks:
                     if [ "{{.LOCAL}}" = "1" ]; then
                         echo "tfvars/{{.VENUE}}.tfvars"
                     elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/o11y-cloudfront-batch/iam-policies.tfvars"
+                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/o11y-cloudfront-batch/iam.tfvars"
                     else
                         echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
                         exit 1

@@ -16,7 +16,6 @@ This system ingests web access logs from various PDS nodes (ATM, EN, GEO, IMG, N
 * [Usage](#usage)
   + [S3 Log Synchronization](#s3-log-synchronization)
   + [Logstash Processing](#logstash-processing)
-    - [Deploying with a Subset of Nodes](#deploying-with-a-subset-of-nodes)
   + [Testing](#testing)
   + [Monitoring](#monitoring)
   + [Adding Tests for New Log Formats](#adding-tests-for-new-log-formats)
@@ -76,7 +75,7 @@ PDS nodes upload access logs to a shared `pds-logs` S3 bucket using Data Upload 
 
 ### Production deployment on AWS
 
-See [`terraform/README.md`](terraform/README.md) for the full step-by-step deployment guide. Infrastructure runs on an MCP Amazon Linux 2023 EC2 with Logstash installed via RPM and managed by systemd. Access is via AWS Systems Manager (SSM) — no SSH keys or special EC2 users required.
+See [`terraform/README.md`](terraform/README.md) for the full step-by-step deployment guide. Infrastructure runs on a PDS Cloud Oracle Linux 9 EC2 with Logstash installed via RPM and managed by systemd. Operators connect via SSH through the CDS bastion host; SSM is limited to system administrators (and developers in dev).
 
 ### Local development and testing
 
@@ -159,7 +158,7 @@ ENABLED_NODES=en LS_SETTINGS_DIR=$(pwd)/config/logstash/config ./scripts/logstas
 ```
 
 Leaving `ENABLED_NODES` unset (the default) builds all nodes, as above. See
-[Deploying with a subset of nodes](#deploying-with-a-subset-of-nodes) below
+[Deploying with a subset of nodes](docs/operations.md#deploying-with-a-subset-of-nodes)
 for the full staged-rollout workflow.
 
 #### 5. Apply the OpenSearch Index Template (manual/one-time)
@@ -275,133 +274,11 @@ s3-log-sync -c config/config.yaml -d /var/log/pds --no-gzip
 ### Logstash Processing
 
 In production, Logstash runs as a `systemd --user` service under the shared `pdsops`
-key-user account on an SA-managed EC2. Access is via AWS Systems Manager
-(no SSH keys, no inbound rules) — day-2 operations (service control, logs,
-config updates) never require sudo once you're the `pdsops` user.
-Full operational runbooks are in [`terraform/README.md`](terraform/README.md).
-
-#### Quick reference (from an SSM session on the EC2, as the pdsops user)
-
-**SSM into the EC2, then switch to `pdsops`.** In practice, `aws ssm
-start-session` lands you as `root` regardless of `--document-name`/Run-As
-(that depends on an IAM grant — `ssm:StartSession` on the Run-As document's
-ARN — that may not be in place). The reliable path is always:
-
-```bash
-aws ssm start-session \
-  --target $(aws ssm get-parameter \
-    --name /pds/o11y-cloudfront-batch/ec2/logstash_instance_id \
-    --query Parameter.Value --output text)
-
-# You land as root — switch in place before running anything below:
-sudo runuser -l pdsops
-```
-
-(`su - pdsops` works the same way.) If your IAM identity does have the
-Run-As grant, you can skip the switch by adding `--document-name $(aws ssm
-get-parameter --name /pds/o11y-cloudfront-batch/ssm/logstash_runas_document --query
-Parameter.Value --output text)` to `start-session` — but don't rely on it
-without confirming it actually lands you as `pdsops` first.
-
-**Service control (no sudo):**
-```bash
-systemctl --user status logstash
-systemctl --user restart logstash
-# journalctl requires adm/wheel group membership — use the log file instead:
-tail -f /var/log/logstash/logstash-plain.log
-```
-
-**Update config (pull latest from GitHub and restart, no sudo):**
-```bash
-# Piped directly from GitHub — no local checkout needed; the script
-# clones/updates its own working copy at REPO_DIR (default /opt/o11y-cloudfront-batch).
-bash <(curl -fsSL https://raw.githubusercontent.com/NASA-PDS/o11y-cloudfront-batch/main/scripts/logstash-deploy.sh)
-
-# To deploy from a non-main branch:
-REPO_BRANCH=<your-branch> bash <(curl -fsSL https://raw.githubusercontent.com/NASA-PDS/o11y-cloudfront-batch/main/scripts/logstash-deploy.sh)
-```
-
-##### Deploying with a Subset of Nodes
-
-Set `ENABLED_NODES` (comma/space-separated, case-insensitive node IDs:
-`atm`, `en`, `geo`, `img`, `naif`, `ppi`, `rings`, `sbn`) to restrict the
-deploy to one or more nodes. Leaving it unset enables all nodes — the
-default. This is useful for a staged rollout, e.g. on a brand-new venue
-with a large S3 backlog: bring EN online by itself first, let it catch up,
-then redeploy with all nodes enabled.
-
-```bash
-# First deploy: EN only, so its backlog catches up without competing for
-# Logstash resources with the other 7 nodes.
-ENABLED_NODES=en bash <(curl -fsSL https://raw.githubusercontent.com/NASA-PDS/o11y-cloudfront-batch/main/scripts/logstash-deploy.sh)
-
-# Once EN has caught up, redeploy with ENABLED_NODES unset (or the full
-# list) to bring the rest of the nodes online:
-bash <(curl -fsSL https://raw.githubusercontent.com/NASA-PDS/o11y-cloudfront-batch/main/scripts/logstash-deploy.sh)
-```
-
-Re-running the deploy script always regenerates `pipelines.yml` and
-`pipelines/*.conf` from scratch, so a node disabled in one run leaves no
-stale config behind in a later run.
-
-**Enable/update the daily egress report email:**
-
-> **WARNING: The egress report scripts (`scripts/egress_report.py`, `src/pds/o11y_batch/egress_report.py`) have not been tested and are not known to work. The instructions below are retained for reference only — do not rely on them without first validating the scripts end-to-end.**
-
-SMTP credentials are read from a local file on the EC2 — no AWS permissions
-beyond reading a file already on disk. Create it once (as root or via sudo),
-before or after the deploy step below:
-```bash
-sudo install -m 600 -o pdsops -g pdsops /dev/null /etc/logstash/smtp.env
-sudo tee /etc/logstash/smtp.env > /dev/null <<'EOF'
-username=<smtp-username>
-password=<smtp-password>
-server=<smtp-host>:587
-sender=<verified-sender-address>
-EOF
-```
-Then enable the cron job:
-```bash
-# EGRESS_REPORT_RECIPIENTS is REQUIRED to enable the report — logstash-deploy.sh
-# skips installing the cron job silently if it's unset.
-EGRESS_REPORT_RECIPIENTS=<comma-separated-addresses> bash <(curl -fsSL https://raw.githubusercontent.com/NASA-PDS/o11y-cloudfront-batch/main/scripts/logstash-deploy.sh)
-
-# Optional overrides (all have defaults — see scripts/logstash-deploy.sh header):
-#   SMTP_ENV_FILE             path to the local file above (default: /etc/logstash/smtp.env)
-#   SMTP_CONFIG_SSM_KEY_PATH  SSM path for SMTP creds instead — only used as a
-#                             fallback if SMTP_ENV_FILE doesn't exist; requires an
-#                             IAM grant this repo doesn't provision by default
-#   EGRESS_REPORT_SCHEDULE    cron schedule (default: "0 6 * * *")
-#   EGRESS_REPORT_HOURS       trailing report window in hours (default: 24)
-```
-Re-running `logstash-deploy.sh` without `EGRESS_REPORT_RECIPIENTS` set leaves
-an already-installed cron job untouched (it only reinstalls when the var is
-present) — to remove the report, edit the `logstash` user's crontab directly
-and delete the `# egress-report` line.
-
-**Clear S3 read history for one node (force re-ingest):**
-```bash
-systemctl --user stop logstash
-# Replace 'naif' with the node name (atm, en, geo, img, naif, ppi, rings, sbn)
-rm -f /var/lib/logstash/plugins/inputs/s3/sincedb_file_input_naif*
-systemctl --user start logstash
-```
-
-**Clear history for all nodes:**
-```bash
-systemctl --user stop logstash
-rm -f /var/lib/logstash/plugins/inputs/s3/sincedb_*
-systemctl --user start logstash
-```
-
-**Smoke test:**
-```bash
-bash /opt/o11y-cloudfront-batch/scripts/smoke-test.sh
-```
-
-> An admin occasionally needs `sudo bash scripts/logstash-bootstrap.sh` — but
-> only for installing/upgrading Logstash itself or re-provisioning the
-> `logstash` account, not for routine operations.
+key-user account on a PDS Cloud EC2, reached through the CDS bastion host. Deploying,
+subset-of-nodes rollouts, the egress report, and re-ingesting S3 history are covered in
+the [Operations Runbook](docs/operations.md). To connect, see the
+[Access model](terraform/logstash/README.md#access-model); to check a deployment, see
+[Verify the deployment](terraform/logstash/README.md#verify-the-deployment).
 
 ### Testing
 
@@ -544,57 +421,8 @@ If a count is wrong, inspect the JSON files in `./output/` to understand which e
 
 ### Monitoring
 
-**On the EC2 (via SSM, as the pdsops user — no sudo):**
-
-```bash
-# Logstash systemd --user service status
-systemctl --user status logstash
-
-# Live logs (journalctl requires adm/wheel group — use the log file instead)
-tail -f /var/log/logstash/logstash-plain.log
-
-# Bad / unparseable logs written by the Logstash pipeline
-tail -f /tmp/bad_logs_$(date +%Y-%m).txt
-
-# First-boot setup logs (root bootstrap phase, then logstash deploy phase)
-tail -f /var/log/logstash-bootstrap.log
-tail -f /var/log/logstash-deploy.log
-```
-
-**Real-time throughput (is it processing right now?):** Logstash exposes a
-monitoring API on `localhost:9600`. Note each S3 input only polls every 2
-hours (`interval => 7200`) — a freshly uploaded file won't show up until
-the next poll, or restart the service to force one immediately.
-
-```bash
-# Per-pipeline in/out event counts, queue depth, worker/duration stats
-curl -s http://localhost:9600/_node/stats/pipelines?pretty | less
-
-# Just one pipeline (e.g. naif)
-curl -s http://localhost:9600/_node/stats/pipelines/naif?pretty
-```
-
-Run it twice a few seconds apart — `events.in`/`events.out` moving means
-it's actively working; `queue.events_count` climbing while `events.out`
-stays flat usually means it's stuck (e.g. blocked on the OpenSearch output).
-
-**Verify data is flowing into OpenSearch:**
-
-```bash
-# Connectivity + auth check (S3, OpenSearch reachable, SigV4 auth)
-bash /opt/o11y-cloudfront-batch/scripts/smoke-test.sh
-
-# Document counts — total, per-index, and per-node breakdown
-bash /opt/o11y-cloudfront-batch/scripts/os-doc-counts.sh
-
-# Narrow to a specific month's index
-bash /opt/o11y-cloudfront-batch/scripts/os-doc-counts.sh pds-weblogs-2026-09
-```
-
-If the OpenSearch Dashboards index count appears stale, `os-doc-counts.sh` queries
-`/_cat/indices` for per-index counts and `/_search` with a terms aggregation for the
-per-node breakdown — all via SigV4-signed requests that bypass the UI and confirm
-the true document count at the API level.
+Service status, logs, pipeline stats, and OpenSearch document counts are covered in the
+[Operations Runbook](docs/operations.md#monitoring).
 
 ## Data Processing Overview
 
@@ -718,58 +546,8 @@ These hooks then will check for any future commits that might contain secrets. T
 
 ## Troubleshooting
 
-### Common Issues
-
-1. **Logstash won't start**
-   - Check service status: `systemctl --user status logstash`
-   - Check logs: `tail -n 50 /var/log/logstash/logstash-plain.log`
-   - Check env file: `cat /etc/logstash/env`
-   - Verify pipeline configs were generated: `ls /etc/logstash/pipelines/`
-   - Re-run deploy to pull latest config and restart (as the pdsops user, no sudo): `bash <(curl -fsSL https://raw.githubusercontent.com/NASA-PDS/o11y-cloudfront-batch/main/scripts/logstash-deploy.sh)`
-   - If Logstash itself isn't installed yet, an SA needs to run `sudo bash scripts/logstash-bootstrap.sh` first
-
-2. **No data in OpenSearch**
-   - Run smoke test: `bash /opt/o11y-cloudfront-batch/scripts/smoke-test.sh`
-   - Check S3 sincedb files: `ls -la /var/lib/logstash/plugins/inputs/s3/`
-   - Check Logstash logs for S3 read errors: `tail -n 100 /var/log/logstash/logstash-plain.log`
-
-3. **`AccessDenied ... not authorized to perform: s3:ListAllMyBuckets`** in the Logstash log
-   - This means `S3_CF_BUCKET_NAME` was empty at deploy time, **not** that IAM is missing a real permission.
-     EN's CloudFront pipeline templates it in as `bucket => ""`, and an empty bucket name makes the S3
-     input plugin fall back to enumerating every bucket in the account (which the IAM policy correctly
-     does *not* allow — it's scoped to one named bucket).
-   - Fix: redeploy with the real bucket set — `S3_CF_BUCKET_NAME=<bucket>` — see
-     [`terraform/logstash/README.md`](terraform/logstash/README.md) for the value used in each venue.
-   - As of the fix for this, `logstash-deploy.sh` also now warns loudly at deploy time if
-     `S3_CF_BUCKET_NAME` is empty, and preserves the last-configured value across redeploys instead of
-     silently resetting it to empty when the var isn't passed — but always pass it explicitly on a
-     first-time manual install (see step 4 of the one-time install below).
-
-4. **High memory usage**
-   - Adjust `pipeline.batch.size` in `config/logstash/config/logstash.yml`
-   - Reduce `pipeline.workers` if needed (default: 1)
-
-5. **Parse failures**
-   - Check log format matches expected patterns
-   - Inspect bad logs: `tail -f /tmp/bad_logs_$(date +%Y-%m).txt`
-   - Update grok patterns in `config/logstash/config/shared/pds-filter.conf`
-
-### Log Locations
-
-- **Logstash service logs**: `/var/log/logstash/logstash-plain.log` (`journalctl` requires adm/wheel group membership)
-- **First-boot bootstrap log** (root phase): `/var/log/logstash-bootstrap.log`
-- **First-boot deploy log** (logstash phase): `/var/log/logstash-deploy.log`
-- **Bad / unparseable logs**: `/tmp/bad_logs_YYYY-MM.txt` (inside the EC2)
-- **Test output**: `./output/` (Docker integration tests)
-
-### Performance Tuning
-
-For production deployments:
-
-1. **Instance sizing**: Use t3.xlarge or larger for high-volume processing
-2. **Batch processing**: Adjust `pipeline.batch.size` based on memory availability
-3. **Queue settings**: Configure `queue.max_bytes` and `queue.max_events`
-4. **Monitoring**: Set up CloudWatch metrics for Logstash performance
+Common failures (Logstash will not start, no data in OpenSearch, empty `S3_CF_BUCKET_NAME`),
+log locations, and tuning are covered in the [Operations Runbook](docs/operations.md#troubleshooting).
 
 ## License
 

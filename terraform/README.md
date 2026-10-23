@@ -7,59 +7,29 @@ Deploys the infrastructure for the PDS Web Analytics pipeline:
 - **IAM policy** — grants the Logstash EC2 role read access to S3 and write access to OpenSearch
 - **Logstash EC2** — Oracle Linux 9 instance running Logstash directly via RPM + systemd
 
-> **OpenSearch** is managed separately in [o11y-platform](https://github.com/NASA-PDS/o11y-platform). Deploy it first — the endpoint is published to SSM and consumed automatically here. Its `opensearch` module bootstraps with `o11y_cloudfront_batch_enabled = false`, so Logstash's role isn't actually allowed to write to OpenSearch until someone flips that flag and re-applies it *after* this repo's `iam/roles` has run — see Step 2 below and o11y-platform's `terraform/README.md#deployment-flow`.
+> **OpenSearch** is managed separately in [o11y-platform](https://github.com/NASA-PDS/o11y-platform). Deploy it first — the endpoint is published to SSM and consumed automatically here. Its `opensearch` module bootstraps with `o11y_cloudfront_batch_enabled = false`, so Logstash's role isn't actually allowed to write to OpenSearch until someone flips that flag and re-applies it *after* this repo's `iam` has run — see the [first deployment phases](https://github.com/NASA-PDS/o11y-platform#first-deployment) in o11y-platform.
 
 ```
 terraform/
-  ├── iam/roles/            # EC2 instance role + profile    — 🔐 admin (iam:CreateRole, iam:AttachRolePolicy)
-  ├── iam/policies/         # IAM policy + role attachment  — 🔐 admin (iam:CreatePolicy, iam:AttachRolePolicy)
+  ├── iam/                  # EC2 role + profile, access policy + attachment — 🔐 admin (iam:CreateRole, iam:CreatePolicy, iam:AttachRolePolicy)
   ├── s3/                   # S3 log bucket
   └── logstash/             # Logstash EC2                   — 🔐 admin (iam:PassRole)
 ```
 
 ---
 
-## Deployment flow
+## Deployment order
 
-```mermaid
-flowchart TD
-    subgraph ext["(1a) o11y-platform"]
-        OS["OpenSearch\no11y_cloudfront_batch_enabled = false\n(bootstrap)"]
-    end
+The cross-repo order (OpenSearch, then IAM, S3 and Logstash here, then the OpenSearch
+access-policy update) is owned by the
+[o11y-platform first deployment](https://github.com/NASA-PDS/o11y-platform#first-deployment)
+phase table. This repo covers its phases 2a (IAM) and 2d (S3 + Logstash EC2). Two
+dependencies to remember:
 
-    subgraph phase1["(1b) o11y-cloudfront-batch"]
-        IAMR["IAM/Roles\n🔐 Admin"]
-        S3["S3 bucket\n🔑 Power-User"]
-    end
-
-    subgraph phase1b["(1c) o11y-cloudfront-batch"]
-        IAMP["IAM/Policies\n🔐 Admin"]
-    end
-
-    subgraph ext2["(2) o11y-platform"]
-        OS2["OpenSearch\no11y_cloudfront_batch_enabled = true\n(access-policy update only)"]
-    end
-
-    subgraph phase2["(3) o11y-cloudfront-batch"]
-        LS["Logstash EC2\n🔐 Admin"]
-    end
-
-    OS -->|"endpoint → SSM"| IAMP
-    OS -->|"endpoint → SSM"| LS
-    IAMR -->|"role-arn + profile → SSM"| IAMP
-    IAMR -->|"profile-name → SSM"| LS
-    IAMP -->|"policy attached to role"| OS2
-    OS2 -->|"access policy now allows Logstash"| LS
-    S3 -->|"bucket → SSM"| LS
-```
-
-1. **(1a) Deploy OpenSearch** — See [o11y-platform](https://github.com/NASA-PDS/o11y-platform) (~15-20 min), bootstrapped with `o11y_cloudfront_batch_enabled = false` (and `o11y_cloudfront_streaming_enabled` set however o11y-cloudfront-streaming's status warrants — the two are independent)
-2. **(1b) While OpenSearch provisions**, can be run in parallel with (1a):
-   - `task apply VENUE=dev COMPONENT=o11y-cloudfront-batch/iam/roles` 🔐 — requires `iam:CreateRole`, `iam:AttachRolePolicy`; creates the EC2 instance role and publishes role ARN + profile name to SSM
-   - `task apply VENUE=dev COMPONENT=o11y-cloudfront-batch/s3` — creates the log bucket, publishes name to SSM
-3. **(1c) After `iam/roles` completes** — `task apply VENUE=dev COMPONENT=o11y-cloudfront-batch/iam/policies` 🔐 — reads the role from SSM, creates the S3/OpenSearch policy, and attaches it. Requires `iam:CreatePolicy`, `iam:AttachRolePolicy`.
-4. **(2) After `iam/policies` completes**, back in [o11y-platform](https://github.com/NASA-PDS/o11y-platform): set `o11y_cloudfront_batch_enabled = true` and re-run `task opensearch:deploy` — this only updates the OpenSearch access policy (adds the Logstash role as a principal), no domain redeployment. Skip this if it's already `true` from a prior deploy.
-5. **(3) After all above complete** — `task apply VENUE=dev COMPONENT=o11y-cloudfront-batch/logstash` 🔐 — requires `iam:PassRole`; reads OpenSearch endpoint, bucket name, and instance profile from SSM at plan time. **Note:** the EC2 role won't actually be able to write to OpenSearch until step (2) has run — `terraform apply` here will succeed either way, but Logstash will get 403s from OpenSearch until then.
+- `iam` reads the OpenSearch ARN from SSM, so OpenSearch must be applied first.
+- Logstash gets 403s from OpenSearch until o11y-platform re-applies `opensearch` with
+  `o11y_cloudfront_batch_enabled = true` (access-policy update only, seconds). `apply`
+  here succeeds either way.
 
 ---
 
@@ -67,7 +37,8 @@ flowchart TD
 
 - [Terragrunt](https://terragrunt.gruntwork.io/docs/getting-started/install/) >= 0.55
 - [Task](https://taskfile.dev) — `brew install go-task/tap/go-task`
-- AWS CLI + [Session Manager plugin](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html) — `brew install --cask session-manager-plugin`
+- AWS CLI
+- SSH access to the CDS bastion host (your key enrolled for bastion access). The [Session Manager plugin](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html) is needed only by system administrators (and developers in dev) who use SSM
 - A local checkout of `cds-infra-deploy` — all Terragrunt inputs live in `venues/<venue>/o11y-cloudfront-batch/`
 - AWS credentials exported:
   ```bash
@@ -79,104 +50,59 @@ flowchart TD
 
 ## Deployment — step by step
 
-All commands run from the `cds-infra-deploy` checkout. See [o11y-platform terraform/README.md](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md) for the full cross-repo deployment flow; the steps below are the o11y-cloudfront-batch subset.
+All commands run from the `cds-infra-deploy` checkout. See the [o11y-platform first deployment](https://github.com/NASA-PDS/o11y-platform#first-deployment) for the full cross-repo flow; the steps below are the o11y-cloudfront-batch subset.
 
-### Step 0: OpenSearch domain — o11y-platform repo
-
-```bash
-task plan  VENUE=dev COMPONENT=o11y-platform/opensearch
-task apply VENUE=dev COMPONENT=o11y-platform/opensearch
-```
-
-Bootstrapped with `o11y_cloudfront_batch_enabled = false`. Publishes endpoint, ARN, and SG ID to SSM.
-
----
-
-### 🔐 Step 1a: IAM role — Admin (`iam:CreateRole`, `iam:AttachRolePolicy`)
+### 🔐 Step 1: IAM (platform phase 2a) — Admin (`iam:CreateRole`, `iam:CreatePolicy`, `iam:AttachRolePolicy`)
 
 ```bash
-task plan  VENUE=dev COMPONENT=o11y-cloudfront-batch/iam/roles
-task apply VENUE=dev COMPONENT=o11y-cloudfront-batch/iam/roles
+task plan  VENUE=dev COMPONENT=o11y-cloudfront-batch/iam
+task apply VENUE=dev COMPONENT=o11y-cloudfront-batch/iam
 ```
 
-Creates `<venue>-o11y-cloudfront-batch-ec2-role` and its instance profile. Publishes to SSM:
+Creates `<venue>-o11y-cloudfront-batch-ec2-role`, its instance profile, and the S3 and OpenSearch access policy attached to the role (`roles.tf` and `policies.tf`, one state). Requires o11y-platform's `opensearch` module applied first (reads `opensearch_arn` from SSM). Publishes to SSM:
 - `/pds/o11y-cloudfront-batch/iam/roles/ec2/instance-role-arn`
 - `/pds/o11y-cloudfront-batch/iam/roles/ec2/instance-profile-name`
 
 ---
 
-### 🔐 Step 1c: IAM policies — Admin (`iam:CreatePolicy`, `iam:AttachRolePolicy`)
-
-```bash
-task plan  VENUE=dev COMPONENT=o11y-cloudfront-batch/iam/policies
-task apply VENUE=dev COMPONENT=o11y-cloudfront-batch/iam/policies
-```
-
-Reads the EC2 role from SSM (published by `iam/roles`). Creates the S3 and OpenSearch access policy and attaches it to the role.
-
----
-
-### Step 1d: S3 bucket — 👤 Power User
+### Step 2: S3 bucket (platform phase 2d) — 👤 Power User
 
 ```bash
 task plan  VENUE=dev COMPONENT=o11y-cloudfront-batch/s3
 task apply VENUE=dev COMPONENT=o11y-cloudfront-batch/s3
 ```
 
-Steps 1a–1d can all run while OpenSearch bootstraps (1a). Step 1c depends on 1a completing first; 1b and 1d are independent.
+Step 2 (`s3`) can run while OpenSearch bootstraps. Step 1 (`iam`) needs the OpenSearch domain applied first, because it reads `opensearch_arn` from SSM.
 
 ---
 
-### Step 2: Grant OpenSearch access — o11y-platform repo
-
-Set `o11y_cloudfront_batch_enabled = true` in `venues/<venue>/o11y-platform/opensearch/terragrunt.hcl` and re-apply. Access-policy update only — seconds, not minutes. Skip if already `true`.
-
-```bash
-task plan  VENUE=dev COMPONENT=o11y-platform/opensearch
-task apply VENUE=dev COMPONENT=o11y-platform/opensearch
-```
-
----
-
-### 🔑 Step 3: Logstash EC2 — Platform Engineer (`iam:PassRole`)
+### 🔑 Step 3: Logstash EC2 (platform phase 2d) — Platform Engineer (`iam:PassRole`)
 
 ```bash
 task plan  VENUE=dev COMPONENT=o11y-cloudfront-batch/logstash
 task apply VENUE=dev COMPONENT=o11y-cloudfront-batch/logstash
 ```
 
-**Logstash will get 403s from OpenSearch if Step 2 hasn't run yet** — `apply` succeeds either way, but OpenSearch access requires the access policy update first.
-
-> **Prod — no EC2 is created.** Production runs Logstash on an existing EC2 managed outside Terraform. `cds-infra-deploy/venues/prod/o11y-cloudfront-batch/logstash/terragrunt.hcl` sets `manage_ec2_instance = false` and `existing_instance_id` — this `apply` step only creates the SSM Run-As document and publishes the instance ID to SSM; it never touches the EC2 itself. See [`terraform/logstash/README.md`](logstash/README.md#using-an-existing-ec2-manage_ec2_instance--false) for details.
+**Logstash will get 403s from OpenSearch until o11y-platform re-applies `opensearch` with `o11y_cloudfront_batch_enabled = true`** — `apply` succeeds either way, but OpenSearch access requires that access-policy update first.
 
 ---
 
 ### Step 4: Initialize Logstash on the EC2
 
-Userdata only installs the SSM agent — it does **not** run bootstrap or
-deploy automatically, on new EC2s or otherwise. Every instance (a fresh
-one, or an already-running one after recreating the OpenSearch domain or
-fixing a bad env file) needs this run manually:
+Userdata on a Terraform-created EC2 installs the SSM agent and runs the full
+bootstrap (Logstash RPM, plugins, `pdsops` account, systemd unit). It does
+**not** deploy config or start Logstash. Every instance (a fresh one, or an
+already-running one after recreating the OpenSearch domain or fixing a bad env
+file) needs the deploy step run manually.
+
+Connect through the bastion and switch to `pdsops` — see the
+[Access model](logstash/README.md#access-model). For an externally managed EC2
+(`manage_ec2_instance = false`), a system administrator first runs
+`logstash-bootstrap.sh` as root, once — see
+[`logstash/README.md`](logstash/README.md#first-boot-setup).
 
 ```bash
-# SSM into the EC2 — this lands as root regardless of the Run-As document
-# unless your IAM identity has ssm:StartSession on that document's ARN, so
-# don't count on landing as pdsops automatically:
-aws ssm start-session \
-  --target $(aws ssm get-parameter \
-    --name /pds/o11y-cloudfront-batch/ec2/logstash_instance_id \
-    --query Parameter.Value --output text)
-
-# First time only (root, one-time): install Logstash + configure the
-# pdsops key-user. Skip if this has already been run on this instance.
-# Repo-independent — download it directly from GitHub:
-curl -fsSL -o logstash-bootstrap.sh https://raw.githubusercontent.com/NASA-PDS/o11y-cloudfront-batch/main/scripts/logstash-bootstrap.sh
-
-sudo LOGSTASH_VERSION=8.18.0 bash logstash-bootstrap.sh
-
-# Switch to pdsops before doing anything else — no sudo from here on:
-sudo runuser -l pdsops
-
+# As pdsops (no sudo from here on).
 # Verify what's currently in the env file, if this isn't the first deploy
 cat /etc/logstash/env
 
@@ -203,9 +129,8 @@ bash <(curl -fsSL https://raw.githubusercontent.com/NASA-PDS/o11y-cloudfront-bat
 
 > `logstash-deploy.sh` must run as `pdsops`, never root — it checks and
 > refuses to run as root. If Logstash itself isn't installed yet, it will
-> also refuse and tell you to run `logstash-bootstrap.sh` first — that's
-> the only step in this whole workflow that ever needs sudo, and it's rare
-> (install/upgrade only).
+> also refuse and tell you to run `logstash-bootstrap.sh` first — the only
+> step in this workflow that needs root, and it's rare (install/upgrade only).
 
 The deploy script will:
 1. Clone/update the o11y-cloudfront-batch repo to `/opt/o11y-cloudfront-batch` (owned by `pdsops`)
@@ -306,15 +231,9 @@ tail -f /tmp/bad_logs_$(date +%Y-%m).txt
 
 ---
 
-### Step 5: Smoke test
+### Step 5: Verify
 
-SSM into the EC2 and run:
-
-```bash
-bash /opt/o11y-cloudfront-batch/scripts/smoke-test.sh
-```
-
-Checks S3 access, OpenSearch network reachability, OpenSearch SigV4 auth, and Logstash service status. OpenSearch `status=green` is expected; `yellow` is acceptable on a single-node dev cluster (no replicas).
+Follow [Verify the deployment](logstash/README.md#verify-the-deployment) in the Logstash module README. It covers the install, service, and end-to-end checks (`scripts/smoke-test.sh`).
 
 ---
 
@@ -336,17 +255,9 @@ The deploy script is idempotent — re-running it pulls the latest repo, redeplo
 1. Edit files under `config/logstash/config/` locally
 2. Test locally: `docker compose run --rm test`
 3. Push to your branch
-4. SSM into the EC2, switch to `pdsops`, and re-run the deploy script (piped from GitHub — no local checkout needed):
+4. Connect to the EC2 as `pdsops` ([Access model](logstash/README.md#access-model)) and re-run the deploy script (piped from GitHub — no local checkout needed):
 
 ```bash
-aws ssm start-session \
-  --target $(aws ssm get-parameter \
-    --name /pds/o11y-cloudfront-batch/ec2/logstash_instance_id \
-    --query Parameter.Value --output text)
-
-# Lands as root — switch first, no sudo from here on:
-sudo runuser -l pdsops
-
 S3_CF_BUCKET_NAME=<cf-logs-bucket-name> bash <(curl -fsSL https://raw.githubusercontent.com/NASA-PDS/o11y-cloudfront-batch/main/scripts/logstash-deploy.sh)
 ```
 
@@ -385,9 +296,9 @@ Each component can be upgraded independently once the stack is fully deployed.
 
 **Logstash version** — update `logstash_version` in `cds-infra-deploy/venues/<venue>/o11y-cloudfront-batch/logstash/terragrunt.hcl` and re-apply. The EC2 is replaced (new instance with updated RPM). Run the smoke test after. See [logstash/README.md](logstash/README.md) for manual steps on an existing EC2.
 
-**Logstash configuration** — edit files under `config/logstash/config/`, push to main, then SSM into the EC2 and re-run `scripts/logstash-deploy.sh`. No Terraform change needed.
+**Logstash configuration** — edit files under `config/logstash/config/`, push to main, then connect to the EC2 as `pdsops` and re-run `scripts/logstash-deploy.sh`. No Terraform change needed.
 
-**IAM policy** — update policy documents in `iam/policies/` and re-apply via Terragrunt. No resource replacement.
+**IAM policy** — update policy documents in `iam/policies.tf` and re-apply via Terragrunt. No resource replacement.
 
 **S3 bucket settings** — lifecycle, encryption, and versioning changes take effect on re-apply of `s3/`.
 
@@ -398,9 +309,8 @@ Each component can be upgraded independently once the stack is fully deployed.
 ```bash
 # Destroy in reverse order from cds-infra-deploy
 task destroy VENUE=dev COMPONENT=o11y-cloudfront-batch/logstash      # 🔑 Platform Engineer
-task destroy VENUE=dev COMPONENT=o11y-cloudfront-batch/iam/policies  # 🔐 Admin
 task destroy VENUE=dev COMPONENT=o11y-cloudfront-batch/s3            # 👤 Power User
-task destroy VENUE=dev COMPONENT=o11y-cloudfront-batch/iam/roles     # 🔐 Admin
+task destroy VENUE=dev COMPONENT=o11y-cloudfront-batch/iam           # 🔐 Admin
 ```
 
 OpenSearch teardown is managed in [o11y-platform](https://github.com/NASA-PDS/o11y-platform).
@@ -410,8 +320,7 @@ OpenSearch teardown is managed in [o11y-platform](https://github.com/NASA-PDS/o1
 ## Architecture notes
 
 - **State files** stored in S3 (`pds-<venue>-<cicd>-infra`):
-  - `o11y-cloudfront-batch/iam-roles.tfstate` — EC2 instance role + profile
-  - `o11y-cloudfront-batch/iam-policies.tfstate` — IAM policies
+  - `o11y-cloudfront-batch/iam.tfstate` — EC2 instance role + profile, IAM policy + attachment
   - `o11y-cloudfront-batch/s3.tfstate` — S3 log bucket
   - `o11y-cloudfront-batch/logstash.tfstate` — Logstash EC2
   - `o11y-platform/opensearch.tfstate` — OpenSearch domain (managed in o11y-platform, own bucket/key)
