@@ -15,16 +15,7 @@ data "aws_ssm_parameter" "ec2_instance_profile_name" {
   name = "/pds/${var.component}/iam/roles/ec2/instance-profile-name"
 }
 
-# TODO: vpc_id and ec2_security_group_name should be sourced from SSM once
-# published under /pds/cds-infra/vpc/ — the pattern exists for other
-# SGs at /pds/cds-infra/vpc/security_groups/registry_api_ecs_app_sg_id etc.
-data "aws_security_group" "logstash_ec2" {
-  count = var.manage_ec2_instance ? 1 : 0
-
-  name   = var.ec2_security_group_name
-  vpc_id = var.vpc_id
-}
-
+# TODO: vpc_id should be sourced from SSM once published under /pds/cds-infra/vpc/.
 data "aws_subnets" "private" {
   count = var.manage_ec2_instance ? 1 : 0
 

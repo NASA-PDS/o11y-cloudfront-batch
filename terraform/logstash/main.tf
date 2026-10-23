@@ -35,6 +35,30 @@ locals {
   }
 }
 
+# Security group for the Logstash EC2. It has no inbound rules of its own (SSH
+# ingress comes from the bastion target SG). Outbound is open so the instance can
+# reach the SSM agent endpoints, DynamoDB (the AMI's SSH key lookup), package
+# repositories, S3 and OpenSearch. The SG ID is published to SSM
+# (outputs.tf) so o11y-platform's OpenSearch module can allow HTTPS from it.
+resource "aws_security_group" "logstash" {
+  count = var.manage_ec2_instance ? 1 : 0
+
+  name        = "${local.ec2_name}-sg"
+  description = "Logstash EC2 - outbound access (SSM, DynamoDB SSH auth, S3, OpenSearch, package repos)"
+  vpc_id      = var.vpc_id
+
+  tags = merge(local.logstash_tags, { Name = "${local.ec2_name}-sg" })
+}
+
+resource "aws_vpc_security_group_egress_rule" "logstash_all_outbound" {
+  count = var.manage_ec2_instance ? 1 : 0
+
+  security_group_id = aws_security_group.logstash[0].id
+  description       = "Allow all outbound"
+  ip_protocol       = "-1"
+  cidr_ipv4         = "0.0.0.0/0"
+}
+
 module "ec2" {
   source = "git@github.com:NASA-PDS/pdc-tf-modules.git//terraform/modules/ec2?ref=feature/ec2-instance-type-in-place-resize"
   count  = var.manage_ec2_instance ? 1 : 0
@@ -47,7 +71,7 @@ module "ec2" {
     instance_name    = local.ec2_name
     instance_type    = var.logstash_instance_type
     subnet_id        = sort(data.aws_subnets.private[0].ids)[0]
-    security_groups  = [data.aws_security_group.logstash_ec2[0].id]
+    security_groups  = [aws_security_group.logstash[0].id]
     root_volume_size = var.logstash_root_volume_size
     root_volume_type = "gp3"
     user_data = base64encode(templatefile("${path.module}/../templates/logstash-userdata.sh.tpl", {

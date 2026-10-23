@@ -53,15 +53,9 @@ variable "existing_instance_id" {
 }
 
 variable "vpc_id" {
-  description = "VPC ID for the Logstash EC2 and security group lookup. Required when manage_ec2_instance = true. TODO: replace with SSM data source under /pds/cds-infra/vpc/id once published."
+  description = "VPC ID for the Logstash EC2, its security group, and the private subnet lookup. Required when manage_ec2_instance = true. TODO: replace with SSM data source under /pds/cds-infra/vpc/id once published."
   type        = string
   sensitive   = true
-  default     = ""
-}
-
-variable "ec2_security_group_name" {
-  description = "Name of the EC2 security group to attach to the Logstash instance. Required when manage_ec2_instance = true. TODO: replace with SSM lookup under /pds/cds-infra/vpc/security_groups/ once published."
-  type        = string
   default     = ""
 }
 

@@ -17,8 +17,10 @@ never touches the EC2. See
 ## Resources
 
 - `module.ec2` (from `pdc-tf-modules//terraform/modules/ec2`) — EC2 instance, only created when `manage_ec2_instance = true`; userdata runs the full bootstrap at first boot (Logstash RPM + plugins, pdsops account setup, systemd unit) — no manual root step required. Attaches the bastion target security group (`bastion_target_sg_ssm_path`, required).
+- `aws_security_group.logstash` — the instance's own security group, with all outbound traffic allowed (`aws_vpc_security_group_egress_rule.logstash_all_outbound`) so the instance can reach the SSM agent endpoints, DynamoDB (SSH key lookup), package repositories, S3 and OpenSearch. It has no inbound rules; SSH ingress comes from the bastion target security group. Only created when `manage_ec2_instance = true`.
 - `aws_route53_record.logstash` — A record in the existing hosted zone (SSM `/pds/hosted-zone/name`, same zone as the bastion) pointing to the EC2 private IP; name matches the EC2 `Name` tag. Only created when `manage_ec2_instance = true`.
 - `aws_ssm_parameter.logstash_instance_id` — publishes the instance ID (created, or `existing_instance_id`) to `/pds/o11y-cloudfront-batch/ec2/logstash_instance_id` (SSM session target for system administrators, and for developers in dev)
+- `aws_ssm_parameter.logstash_security_group_id` — publishes the Logstash security group ID to `/pds/o11y-cloudfront-batch/ec2/logstash_security_group_id`. o11y-platform's `opensearch` module reads it to allow HTTPS from Logstash into the OpenSearch domain. Only created when `manage_ec2_instance = true`.
 - `aws_ssm_parameter.logstash_fqdn` — publishes the Route53 FQDN to `/pds/o11y-cloudfront-batch/ec2/logstash_fqdn` (SSH target via bastion). Only created when `manage_ec2_instance = true`.
 
 ### Access model
@@ -84,8 +86,7 @@ Deploy `iam`, `s3`, and the o11y-platform OpenSearch module before applying this
 | `manage_ec2_instance` | `bool` | `true` | Whether this module creates the EC2. Set `false` to reuse an existing instance. |
 | `existing_instance_id` | `string` | `""` | Instance ID to publish when `manage_ec2_instance = false`. Required in that mode. |
 | `ami_id` | `string` | — | AMI ID for the EC2 instance. Must be the exact SA-provided AMI ID for the target venue. |
-| `vpc_id` | `string` | `""` | VPC ID for subnet and security group lookup. Required when `manage_ec2_instance = true`. |
-| `ec2_security_group_name` | `string` | `""` | Name of the EC2 security group to attach. Required when `manage_ec2_instance = true`. |
+| `vpc_id` | `string` | `""` | VPC ID for the EC2 security group and subnet lookup. Required when `manage_ec2_instance = true`. |
 | `resource_prefix` | `string` | — | Prefix for all resource names (e.g. `pds-dev`). No CI/CD identifiers. |
 | `s3_cf_bucket_name` | `string` | `""` | S3 bucket containing CloudFront logs (EN node only). Leave empty to skip. |
 | `logstash_instance_type` | `string` | `t3.large` | EC2 instance type. Only used when `manage_ec2_instance = true`. |
