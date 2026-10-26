@@ -127,6 +127,16 @@ echo "--- Deploying Logstash pipeline config ---"
 cp -r "$REPO_DIR/config/logstash/config/"* "$LOGSTASH_CONFIG_DIR/"
 echo "Config deployed to $LOGSTASH_CONFIG_DIR"
 
+# Size the JVM heap to half of system RAM, capped at the 8 GB set in jvm.options.
+# A heap larger than the instance can reserve makes the JVM exit at startup.
+MEM_TOTAL_MB="$(awk '/^MemTotal:/ {print int($2 / 1024)}' /proc/meminfo)"
+HEAP_MB=$(( MEM_TOTAL_MB / 2 ))
+if [ "$HEAP_MB" -gt 8192 ]; then
+  HEAP_MB=8192
+fi
+sed -i -E "s/^-Xms.*/-Xms${HEAP_MB}m/; s/^-Xmx.*/-Xmx${HEAP_MB}m/" "$LOGSTASH_CONFIG_DIR/jvm.options"
+echo "JVM heap: ${HEAP_MB} MB (system RAM ${MEM_TOTAL_MB} MB)"
+
 echo "--- Building Logstash pipeline configs ---"
 LS_SETTINGS_DIR="$LOGSTASH_CONFIG_DIR" ENABLED_NODES="$ENABLED_NODES" \
   bash "$REPO_DIR/scripts/logstash_build_config.sh"
