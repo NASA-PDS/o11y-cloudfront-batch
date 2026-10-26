@@ -158,40 +158,36 @@ follow the operator steps below.
 
 **Operator steps (no sudo, same for both cases):**
 
-```bash
-# 1. Connect through the bastion and switch to pdsops (see Access model).
+1. Connect through the bastion and switch to `pdsops` ([Access model](#access-model)).
+2. Set the deploy variables. `S3_CF_BUCKET_NAME` is required on a first-time deploy; an unset value breaks the EN pipeline at runtime. Read it from the SSM parameter that holds the CloudFront logs bucket name. Set it to `""` when the venue has no EN CloudFront input.
 
-# 2. Deploy config and start the service.
-#    ALWAYS set S3_CF_BUCKET_NAME on a first-time deploy (use "" if EN
-#    CloudFront isn't used here) — an unset value silently breaks the EN
-#    pipeline at runtime.
-S3_CF_BUCKET_NAME="<cf-logs-bucket-or-empty-string>"
-REPO_BRANCH=main
-EGRESS_REPORT_RECIPIENTS="<comma-separated-recipients>"
-export S3_CF_BUCKET_NAME REPO_BRANCH EGRESS_REPORT_RECIPIENTS
-bash <(curl -fsSL https://raw.githubusercontent.com/NASA-PDS/o11y-cloudfront-batch/main/scripts/logstash-deploy.sh)
+   ```bash
+   AWS_REGION="<aws-region>"
+   CF_BUCKET_PARAM="<ssm-parameter-holding-the-cf-logs-bucket-name>"
+   S3_CF_BUCKET_NAME="$(aws ssm get-parameter --name "${CF_BUCKET_PARAM}" --query Parameter.Value --output text --region "${AWS_REGION}")"
+   REPO_BRANCH="main"
+   export S3_CF_BUCKET_NAME REPO_BRANCH
+   echo "S3_CF_BUCKET_NAME=${S3_CF_BUCKET_NAME}"
+   ```
 
-# 3. Verify (see "Verify the deployment" below)
-systemctl --user status logstash
-```
+   The `echo` must print a non-empty bucket name. If `aws ssm get-parameter` returns `AccessDenied`, set `S3_CF_BUCKET_NAME` by hand.
+3. Deploy the config and start the service. The script and the config come from `REPO_BRANCH`.
 
-On a venue with a large initial S3 backlog, consider staging the rollout in
-step 2 instead: set `ENABLED_NODES=en` (comma/space-separated node IDs) so
-only EN's pipeline runs at first, then redeploy later with `ENABLED_NODES`
-unset to bring the rest of the nodes online once EN has caught up. See
-[`../../docs/operations.md`](../../docs/operations.md#deploying-with-a-subset-of-nodes) for
-details.
+   ```bash
+   bash <(curl -fsSL "https://raw.githubusercontent.com/NASA-PDS/o11y-cloudfront-batch/${REPO_BRANCH}/scripts/logstash-deploy.sh")
+   ```
+4. Confirm the service is running, then continue with [Verify the deployment](#verify-the-deployment).
 
-`EGRESS_REPORT_RECIPIENTS` in step 2 is **required to enable the daily
-egress report cron job** — `logstash-deploy.sh` skips installing it silently
-if unset. SMTP credentials are read from a local file on the EC2
-(`/etc/logstash/smtp.env` by default, override with `SMTP_ENV_FILE`) — no
-extra AWS permissions needed. Create that file once by hand before (or
-after) this step; see [`../../docs/operations.md`](../../docs/operations.md)
-for the exact format and the full list of egress-report env vars. (SSM is
-also supported as a fallback via `SMTP_CONFIG_SSM_KEY_PATH`, but requires an
-IAM grant this module doesn't provision by default — the local file avoids
-that entirely.)
+   ```bash
+   systemctl --user is-active logstash
+   ```
+
+   Expected output: `active`.
+
+**Optional settings for step 3:**
+
+- Staged rollout on a venue with a large initial S3 backlog: export `ENABLED_NODES=en` (comma- or space-separated node IDs) so only EN's pipeline runs. Redeploy with `ENABLED_NODES` unset to enable the remaining nodes once EN has caught up. See [`../../docs/operations.md`](../../docs/operations.md#deploying-with-a-subset-of-nodes).
+- Daily egress report: export `EGRESS_REPORT_RECIPIENTS` (comma-separated addresses). `logstash-deploy.sh` skips installing the cron job when it is unset. SMTP credentials are read from `/etc/logstash/smtp.env` (override with `SMTP_ENV_FILE`); create that file once by hand. The file format and the full list of egress-report variables are in [`../../docs/operations.md`](../../docs/operations.md). `SMTP_CONFIG_SSM_KEY_PATH` selects an SSM fallback, which needs an IAM grant this module does not provision.
 
 ### Day-2 operations — no sudo
 
@@ -208,9 +204,9 @@ Logstash version upgrade on an existing instance.
 
 ## Verify the deployment
 
-Run these on the EC2 as `pdsops`.
+Run every step on the EC2 as `pdsops`.
 
-**1. Instance is up and bootstrapped** (Logstash installed, `pdsops` configured):
+### 1. Bootstrap complete
 
 ```bash
 rpm -q logstash
@@ -218,14 +214,17 @@ grep "Bootstrap complete" /var/log/logstash-bootstrap.log
 loginctl show-user pdsops --property=Linger
 ```
 
-`rpm -q` prints the installed version. `Linger=yes` confirms the
-`systemd --user` service survives logouts. The bootstrap log exists on
-Terraform-created instances only (on an existing EC2, `logstash-bootstrap.sh`
-prints `=== Bootstrap complete ===` to the console). If a check fails on a
-Terraform-created instance, read `/var/log/logstash-bootstrap.log` and
-`/var/log/cloud-init-output.log`.
+| Command | Expected result |
+|---|---|
+| `rpm -q logstash` | `logstash-<version>` |
+| `grep "Bootstrap complete" ...` | one matching line |
+| `loginctl show-user pdsops --property=Linger` | `Linger=yes` |
 
-**2. Config is deployed and the service is running** (after `logstash-deploy.sh`):
+On failure, read `/var/log/logstash-bootstrap.log` and `/var/log/cloud-init-output.log`. The bootstrap log exists on Terraform-created instances only; on an existing EC2, `logstash-bootstrap.sh` prints `=== Bootstrap complete ===` to the console.
+
+### 2. Config deployed and service running
+
+Run after `logstash-deploy.sh`.
 
 ```bash
 systemctl --user is-active logstash
@@ -233,21 +232,32 @@ ls /etc/logstash/pipelines/
 tail -n 20 /var/log/logstash/logstash-plain.log
 ```
 
-`logstash-deploy.sh` refuses to run if Logstash is not installed, so a
-completed deploy confirms the install.
+| Command | Expected result |
+|---|---|
+| `systemctl --user is-active logstash` | `active` |
+| `ls /etc/logstash/pipelines/` | one `.conf` file per enabled node |
+| `tail -n 20 .../logstash-plain.log` | no `ERROR` entries after the last start |
 
-**3. One command for all of the above plus AWS connectivity** (after `logstash-deploy.sh`):
+`logstash-deploy.sh` refuses to run when Logstash is not installed.
+
+### 3. Smoke test
+
+Prerequisite: o11y-platform's `opensearch` module has been re-applied with `o11y_cloudfront_batch_enabled = true` (see the [o11y-platform deployment flow](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md#deployment-flow)). Until then the OpenSearch checks fail with timeouts or 403 responses.
 
 ```bash
 bash /opt/o11y-cloudfront-batch/scripts/smoke-test.sh
 ```
 
-It checks the Logstash RPM, linger, deployed pipeline configs, S3 access,
-OpenSearch reachability and SigV4 auth, and the service state, and exits
-non-zero if any check fails. OpenSearch `status=green` is expected; `yellow` is
-acceptable on a single-node dev cluster. To confirm data is landing, run
-`scripts/os-doc-counts.sh` (see the
-[Operations Runbook](../../docs/operations.md#monitoring)).
+Expected result: exit code 0 with every check passing. The script checks the Logstash RPM, linger, deployed pipeline configs, S3 access, OpenSearch reachability and SigV4 auth, and the service state. OpenSearch `status=green` is expected; `yellow` is acceptable on a single-node dev cluster.
 
-**Before deploying**, test pipeline changes locally with the Docker suite in
-[`tests/README.md`](../../tests/README.md) (`docker compose run --rm test`).
+### 4. Data flow
+
+```bash
+bash /opt/o11y-cloudfront-batch/scripts/os-doc-counts.sh
+```
+
+Expected result: document counts increase between runs. See the [Operations Runbook](../../docs/operations.md#monitoring).
+
+### Before deploying
+
+Test pipeline changes locally with the Docker suite in [`tests/README.md`](../../tests/README.md) (`docker compose run --rm test`).
