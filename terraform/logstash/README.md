@@ -159,18 +159,13 @@ follow the operator steps below.
 **Operator steps (no sudo, same for both cases):**
 
 1. Connect through the bastion and switch to `pdsops` ([Access model](#access-model)).
-2. Set the deploy variables. `S3_CF_BUCKET_NAME` is required on a first-time deploy; an unset value breaks the EN pipeline at runtime. Read it from the SSM parameter that holds the CloudFront logs bucket name. Set it to `""` when the venue has no EN CloudFront input.
+2. Set the deploy variables. `S3_CF_BUCKET_NAME` is required on a first-time deploy; an unset value breaks the EN pipeline at runtime. Set it to the CloudFront logs bucket name, or to `""` when the venue has no EN CloudFront input.
 
    ```bash
-   AWS_REGION="<aws-region>"
-   CF_BUCKET_PARAM="<ssm-parameter-holding-the-cf-logs-bucket-name>"
-   S3_CF_BUCKET_NAME="$(aws ssm get-parameter --name "${CF_BUCKET_PARAM}" --query Parameter.Value --output text --region "${AWS_REGION}")"
+   S3_CF_BUCKET_NAME="<cf-logs-bucket-or-empty-string>"
    REPO_BRANCH="main"
    export S3_CF_BUCKET_NAME REPO_BRANCH
-   echo "S3_CF_BUCKET_NAME=${S3_CF_BUCKET_NAME}"
    ```
-
-   The `echo` must print a non-empty bucket name. If `aws ssm get-parameter` returns `AccessDenied`, set `S3_CF_BUCKET_NAME` by hand.
 3. Deploy the config and start the service. The script and the config come from `REPO_BRANCH`.
 
    ```bash
