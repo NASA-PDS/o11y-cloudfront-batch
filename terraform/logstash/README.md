@@ -164,7 +164,16 @@ follow the operator steps below.
    ```bash
    S3_CF_BUCKET_NAME="<cf-logs-bucket-or-empty-string>"
    REPO_BRANCH="main"
-   export S3_CF_BUCKET_NAME REPO_BRANCH
+
+   # Optional: node IDs to enable, comma- or space-separated (example: "en").
+   # Empty enables all nodes.
+   ENABLED_NODES=""
+
+   # Optional: comma-separated report recipients. Empty skips the daily egress
+   # report cron job.
+   EGRESS_REPORT_RECIPIENTS=""
+
+   export S3_CF_BUCKET_NAME REPO_BRANCH ENABLED_NODES EGRESS_REPORT_RECIPIENTS
    ```
 3. Deploy the config and start the service. The script and the config come from `REPO_BRANCH`.
 
@@ -179,10 +188,10 @@ follow the operator steps below.
 
    Expected output: `active`.
 
-**Optional settings for step 3:**
+**Optional settings in step 2:**
 
-- Staged rollout on a venue with a large initial S3 backlog: export `ENABLED_NODES=en` (comma- or space-separated node IDs) so only EN's pipeline runs. Redeploy with `ENABLED_NODES` unset to enable the remaining nodes once EN has caught up. See [`../../docs/operations.md`](../../docs/operations.md#deploying-with-a-subset-of-nodes).
-- Daily egress report: export `EGRESS_REPORT_RECIPIENTS` (comma-separated addresses). `logstash-deploy.sh` skips installing the cron job when it is unset. SMTP credentials are read from `/etc/logstash/smtp.env` (override with `SMTP_ENV_FILE`); create that file once by hand. The file format and the full list of egress-report variables are in [`../../docs/operations.md`](../../docs/operations.md). `SMTP_CONFIG_SSM_KEY_PATH` selects an SSM fallback, which needs an IAM grant this module does not provision.
+- `ENABLED_NODES`: staged rollout on a venue with a large initial S3 backlog. Set it to `en` so only EN's pipeline runs. Redeploy with `ENABLED_NODES=""` to enable the remaining nodes once EN has caught up. See [`../../docs/operations.md`](../../docs/operations.md#deploying-with-a-subset-of-nodes).
+- `EGRESS_REPORT_RECIPIENTS`: enables the daily egress report cron job. `logstash-deploy.sh` skips the cron job when it is empty. SMTP credentials are read from `/etc/logstash/smtp.env` (override with `SMTP_ENV_FILE`); create that file once by hand. The file format and the full list of egress-report variables are in [`../../docs/operations.md`](../../docs/operations.md). `SMTP_CONFIG_SSM_KEY_PATH` selects an SSM fallback, which needs an IAM grant this module does not provision.
 
 ### Day-2 operations — no sudo
 
