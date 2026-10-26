@@ -1,8 +1,8 @@
 #!/bin/bash
 # Cloud-init userdata for the PDS Logstash EC2.
-# Runs as root at first boot — installs the SSM agent (used by system
-# administrators, and by developers in dev), then runs the full Logstash
-# bootstrap: packages, Logstash RPM, plugins, pdsops key-user account
+# Runs as root at first boot — confirms the AMI's SSM agent (used by system
+# administrators, and by developers in dev) is running, then runs the full
+# Logstash bootstrap: packages, Logstash RPM, plugins, pdsops key-user account
 # configuration, and the systemd --user unit.
 #
 # After this script completes an operator can SSH in via the bastion, run
@@ -12,7 +12,6 @@
 # by cloud-init at /var/log/cloud-init-output.log.
 #
 # Template variables (substituted by Terraform templatefile):
-#   aws_region       - AWS region (for SSM agent RPM URL)
 #   logstash_version - Logstash RPM version to install (e.g. 8.18.0)
 set -euo pipefail
 
@@ -27,13 +26,14 @@ echo "Logstash version : $LOGSTASH_VERSION"
 echo "Started          : $(date -u)"
 
 # ----------------------------------------
-# 1. SSM agent — must succeed, it is the system administrator access path
+# 1. SSM agent — the AMI ships it; it is the system administrator access path
 # ----------------------------------------
-echo "--- Installing SSM agent ---"
-SSM_RPM="https://s3.${aws_region}.amazonaws.com/amazon-ssm-${aws_region}/latest/linux_amd64/amazon-ssm-agent.rpm"
-dnf install -y "$SSM_RPM"
-systemctl enable amazon-ssm-agent
-systemctl start amazon-ssm-agent
+echo "--- Checking SSM agent ---"
+if ! rpm -q amazon-ssm-agent >/dev/null 2>&1; then
+  echo "ERROR: amazon-ssm-agent is not installed — the AMI must ship the SSM agent." >&2
+  exit 1
+fi
+systemctl enable --now amazon-ssm-agent
 echo "SSM agent installed and running"
 
 # ----------------------------------------
@@ -47,8 +47,18 @@ if ! dnf info python3.13 &>/dev/null; then
   PYTHON_BIN="python3"
   PYTHON_PKGS="python3 python3-pip"
 fi
-dnf install -y git $PYTHON_PKGS gettext awscli2 --quiet
-"$PYTHON_BIN" -m pip install --quiet --break-system-packages boto3 requests
+dnf install -y git $PYTHON_PKGS gettext --quiet
+# The AMI ships an AWS CLI; install one only if it is missing.
+if ! command -v aws >/dev/null 2>&1; then
+  dnf install -y awscli2 --quiet
+fi
+# pip older than 23.0.1 (python3.9 on RHEL 9) rejects --break-system-packages.
+PIP_HELP="$("$PYTHON_BIN" -m pip install --help 2>/dev/null || true)"
+PIP_FLAGS=""
+if grep -q -- "--break-system-packages" <<<"$PIP_HELP"; then
+  PIP_FLAGS="--break-system-packages"
+fi
+"$PYTHON_BIN" -m pip install --quiet $PIP_FLAGS boto3 requests
 
 echo "--- Installing Logstash $LOGSTASH_VERSION ---"
 rpm --import https://artifacts.elastic.co/GPG-KEY-elasticsearch

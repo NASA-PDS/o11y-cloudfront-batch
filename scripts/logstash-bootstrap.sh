@@ -60,8 +60,18 @@ if [ ! -f /usr/share/logstash/bin/logstash ]; then
     PYTHON_BIN="python3"
     PYTHON_PKGS="python3 python3-pip"
   fi
-  dnf install -y git $PYTHON_PKGS gettext awscli2 --quiet
-  "$PYTHON_BIN" -m pip install --quiet --break-system-packages boto3 requests
+  dnf install -y git $PYTHON_PKGS gettext --quiet
+  # The AMI ships an AWS CLI; install one only if it is missing.
+  if ! command -v aws >/dev/null 2>&1; then
+    dnf install -y awscli2 --quiet
+  fi
+  # pip older than 23.0.1 (python3.9 on RHEL 9) rejects --break-system-packages.
+  PIP_HELP="$("$PYTHON_BIN" -m pip install --help 2>/dev/null || true)"
+  PIP_FLAGS=""
+  if grep -q -- "--break-system-packages" <<<"$PIP_HELP"; then
+    PIP_FLAGS="--break-system-packages"
+  fi
+  "$PYTHON_BIN" -m pip install --quiet $PIP_FLAGS boto3 requests
 
   rpm --import https://artifacts.elastic.co/GPG-KEY-elasticsearch
   cat > /etc/yum.repos.d/elastic.repo <<'REPO'

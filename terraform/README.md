@@ -89,7 +89,7 @@ task apply VENUE=dev COMPONENT=o11y-cloudfront-batch/logstash
 
 ### Step 4: Initialize Logstash on the EC2
 
-Userdata on a Terraform-created EC2 installs the SSM agent and runs the full
+Userdata on a Terraform-created EC2 confirms the SSM agent is running and runs the full
 bootstrap (Logstash RPM, plugins, `pdsops` account, systemd unit). It does
 **not** deploy config or start Logstash. Every instance (a fresh one, or an
 already-running one after recreating the OpenSearch domain or fixing a bad env

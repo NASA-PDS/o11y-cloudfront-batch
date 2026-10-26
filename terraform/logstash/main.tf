@@ -77,7 +77,6 @@ module "ec2" {
     root_volume_size = var.logstash_root_volume_size
     root_volume_type = "gp3"
     user_data = base64encode(templatefile("${path.module}/../templates/logstash-userdata.sh.tpl", {
-      aws_region       = var.aws_region
       logstash_version = var.logstash_version
     }))
   }]
