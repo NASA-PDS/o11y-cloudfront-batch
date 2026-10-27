@@ -16,7 +16,7 @@ never touches the EC2. See
 
 ## Resources
 
-- `module.ec2` (from `pdc-tf-modules//terraform/modules/ec2`) — EC2 instance, only created when `manage_ec2_instance = true`; userdata runs the full bootstrap at first boot (Logstash RPM + plugins, pdsops account setup, systemd unit) — no manual root step required. Attaches the bastion target security group (`bastion_target_sg_ssm_path`, required).
+- `module.ec2` (from `pdc-tf-modules//terraform/modules/ec2`) — EC2 instance, only created when `manage_ec2_instance = true`; userdata runs the full bootstrap at first boot (Logstash RPM + plugins, pdsops account setup, systemd unit) — no manual root step required. Attaches the bastion target security group (`bastion_target_sg_ssm_path`, required). Tagged `Patch = "true"`. See [Replacing the instance](#replacing-the-instance).
 - `aws_security_group.logstash` — the instance's own security group, with all outbound traffic allowed (`aws_vpc_security_group_egress_rule.logstash_all_outbound`) so the instance can reach the SSM agent endpoints, DynamoDB (SSH key lookup), package repositories, S3 and OpenSearch. It has no inbound rules; SSH ingress comes from the bastion target security group. Only created when `manage_ec2_instance = true`.
 - `aws_route53_record.logstash` — A record in the existing hosted zone (SSM `/pds/hosted-zone/name`, same zone as the bastion) pointing to the EC2 private IP; name matches the EC2 `Name` tag. Only created when `manage_ec2_instance = true`.
 - `aws_ssm_parameter.logstash_instance_id` — publishes the instance ID (created, or `existing_instance_id`) to `/pds/o11y-cloudfront-batch/ec2/logstash_instance_id` (SSM session target for system administrators, and for developers in dev)
@@ -116,6 +116,17 @@ All variables are managed as Terragrunt inputs in `cds-infra-deploy`. Run from t
 task plan  VENUE=dev COMPONENT=o11y-cloudfront-batch/logstash
 task apply VENUE=dev COMPONENT=o11y-cloudfront-batch/logstash
 ```
+
+## Replacing the instance
+
+A userdata change (for example a new `logstash_version`) replaces the instance (`user_data_replace_on_change = true`). Other changes apply in place.
+
+A replacement:
+
+- Gets a new instance ID, IP and host keys. The Route53 record and SSM parameter follow.
+- Loses the S3 `sincedb`, so logs are re-read. `document_id` is a fingerprint, so documents are overwritten, not duplicated. For a large backlog, deploy with `ENABLED_NODES` ([First-boot setup](#first-boot-setup)).
+- Deletes the old root volume.
+- Needs the [First-boot setup](#first-boot-setup) operator steps re-run.
 
 ## Using an existing EC2 (`manage_ec2_instance = false`)
 

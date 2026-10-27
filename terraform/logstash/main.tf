@@ -69,6 +69,9 @@ module "ec2" {
   instance_profile           = data.aws_ssm_parameter.ec2_instance_profile_name.value
   bastion_target_sg_ssm_path = var.bastion_target_sg_ssm_path
 
+  # Nothing on the root volume needs to outlive the instance.
+  root_volume_delete_on_termination = true
+
   ec2_instance_configs = [{
     instance_name    = local.ec2_name
     instance_type    = var.logstash_instance_type
@@ -79,6 +82,8 @@ module "ec2" {
     user_data = base64encode(templatefile("${path.module}/../templates/logstash-userdata.sh.tpl", {
       logstash_version = var.logstash_version
     }))
+    # Userdata runs only at first boot, so a change must replace the instance.
+    user_data_replace_on_change = true
   }]
 
   required_tags = {
