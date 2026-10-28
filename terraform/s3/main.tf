@@ -2,10 +2,15 @@ module "s3_bucket" {
   source      = "git@github.com:NASA-PDS/pdc-tf-modules.git//terraform/modules/s3/bucket?ref=develop"
   bucket_name = local.s3_bucket_name
   partition   = var.partition
-  versioning  = "Disabled"
+  versioning  = "Enabled"
 
-  # Disable module's own lifecycle rule — we manage all lifecycle rules in the resource below
-  abort_incomplete_multipart_upload_days = 0
+  # Lifecycle rules: current objects go to Intelligent-Tiering immediately (module default),
+  # incomplete multipart uploads abort after 7 days, and every noncurrent version expires after 14 days.
+  storage_class                          = "INTELLIGENT_TIERING"
+  storage_class_transition_days          = 0
+  abort_incomplete_multipart_upload_days = 7
+  noncurrent_version_expiration_days     = 14
+  newer_noncurrent_versions              = 0
 
   # Public access blocks are enforced at the account level; enable_blocks=false avoids a redundant conflict
   enable_blocks = false
@@ -38,39 +43,5 @@ module "s3_bucket" {
     component = var.component
     cicd      = var.cicd
     managedby = var.managedby
-  }
-}
-
-
-
-resource "aws_s3_bucket_lifecycle_configuration" "lifecycle" {
-  bucket = module.s3_bucket.bucket_name
-
-  rule {
-    id     = "abort-incomplete-multipart-upload"
-    status = "Enabled"
-
-    filter {}
-
-    abort_incomplete_multipart_upload {
-      days_after_initiation = 7
-    }
-  }
-
-  rule {
-    id     = "transition-to-intelligent-tiering"
-    status = "Enabled"
-
-    filter {}
-
-    transition {
-      days          = 0
-      storage_class = "INTELLIGENT_TIERING"
-    }
-
-    noncurrent_version_transition {
-      noncurrent_days = 0
-      storage_class   = "INTELLIGENT_TIERING"
-    }
   }
 }
