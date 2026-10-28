@@ -14,11 +14,10 @@ This system ingests web access logs from various PDS nodes (ATM, EN, GEO, IMG, N
 * [Package Structure](#package-structure)
 * [Configuration](#configuration)
 * [Usage](#usage)
-  + [S3 Log Synchronization](#s3-log-synchronization)
+  + [S3 Log Synchronization](#s3-log-synchronization-deprecated)
   + [Logstash Processing](#logstash-processing)
   + [Testing](#testing)
   + [Monitoring](#monitoring)
-  + [Adding Tests for New Log Formats](#adding-tests-for-new-log-formats)
 * [Data Processing Overview](#data-processing-overview)
   + [Supported Log Formats](#supported-log-formats)
   + [ECS Field Mapping](#ecs-field-mapping)
@@ -397,7 +396,7 @@ These hooks then will check for any future commits that might contain secrets. T
 1. Create a new input configuration in `config/logstash/config/inputs/`
 2. Add the node to `config/logstash/config/pipelines.yml.template`
 3. Update the S3 sync configuration
-4. Add integration tests — see [Adding Tests for New Log Formats](#adding-tests-for-new-log-formats)
+4. Add integration tests — see [Adding Tests for New Log Formats](tests/README.md#adding-tests-for-new-log-formats)
 5. Update this README with node information
 
 ### Contributing

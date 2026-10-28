@@ -15,11 +15,11 @@ terraform/
   └── logstash/    # Logstash EC2, security group, DNS record
 ```
 
-| Module | Runbook phase | Tier | State key | Publishes to SSM |
-|---|---|---|---|---|
-| `iam` | [Phase 2a](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md#phase-2---iam) | Admin | `o11y-cloudfront-batch/iam.tfstate` | `/pds/o11y-cloudfront-batch/iam/roles/ec2/instance-role-arn`, `.../instance-profile-name` |
-| `s3` | [Phase 3](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md#phase-3---batch-s3-and-logstash-ec2) | Power User | `o11y-cloudfront-batch/s3.tfstate` | `/pds/o11y-cloudfront-batch/s3/bucket_name` |
-| `logstash` | [Phase 3](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md#phase-3---batch-s3-and-logstash-ec2) | Platform Engineer | `o11y-cloudfront-batch/logstash.tfstate` | `/pds/o11y-cloudfront-batch/ec2/logstash_security_group_id`, `.../logstash_instance_id`, `.../logstash_fqdn` |
+| Module | Runbook phase | State key |
+|---|---|---|
+| `iam` | [Phase 2a](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md#phase-2---iam) | `o11y-cloudfront-batch/iam.tfstate` |
+| `s3` | [Phase 3](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md#phase-3---batch-s3-and-logstash-ec2) | `o11y-cloudfront-batch/s3.tfstate` |
+| `logstash` | [Phase 3](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md#phase-3---batch-s3-and-logstash-ec2) | `o11y-cloudfront-batch/logstash.tfstate` |
 
 Each module's venue inputs are in `cds-infra-deploy` at `venues/<venue>/o11y-cloudfront-batch/<module>/terragrunt.hcl`. Apply each module in its runbook phase from the table above. The phase's Setup block assigns `VENUE`, `REGION`, the credentials for its permission tier, and the `cds-infra-deploy` directory, and its steps give the exact `task` commands.
 
@@ -29,15 +29,13 @@ Reaching the Logstash instance also needs SSH access to the CDS bastion host (yo
 
 Creates `<venue>-o11y-cloudfront-batch-ec2-role`, its instance profile, and the S3 and OpenSearch access policy attached to the role. `roles.tf` and `policies.tf` share one state.
 
-- **Needs:** o11y-platform `opensearch` applied first (Phase 1). It reads `opensearch_arn` from SSM.
 - **Apply and verify:** [Phase 2a](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md#phase-2---iam).
-- **Update:** edit the policy documents in `iam/policies.tf` and re-apply. The policy updates in place. If the role is ever recreated, its ARN changes in SSM; re-run the runbook [Phase 5](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md#phase-5---grant-consumers-opensearch-access) so the OpenSearch access policy follows.
+- **Update:** edit the policy documents in `iam/policies.tf` and re-apply. The policy updates in place.
 
 ## s3
 
 Creates the bucket that receives PDS node access logs.
 
-- **Needs:** nothing. It can run while OpenSearch bootstraps.
 - **Apply and verify:** [Phase 3](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md#phase-3---batch-s3-and-logstash-ec2).
 - **Update:** lifecycle, encryption, and versioning changes take effect on re-apply.
 
@@ -45,11 +43,8 @@ Creates the bucket that receives PDS node access logs.
 
 Creates the Logstash EC2, its security group, and a Route53 A record. The security group ID is published to SSM so o11y-platform can allow HTTPS from it. Module inputs, SSM dependencies, and outputs are in [`logstash/README.md`](logstash/README.md).
 
-- **Needs:** `iam` (instance profile name), `s3` (bucket name), and `opensearch` (endpoint).
 - **Apply and verify:** [Phase 3](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md#phase-3---batch-s3-and-logstash-ec2).
-- **After apply:** the instance runs the userdata bootstrap (Logstash RPM, plugins, `pdsops` account, systemd unit) but has no pipeline config and is not started. Deploy it with [First-boot setup](logstash/README.md#first-boot-setup), then [Verify the deployment](logstash/README.md#verify-the-deployment). This is runbook [Phase 7](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md#phase-7---deploy-logstash-and-verify).
-- **Access to OpenSearch:** Logstash gets 403s or timeouts until the runbook [Phase 5](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md#phase-5---grant-consumers-opensearch-access) applies. `apply` here succeeds either way.
-- **CloudFront logs:** reading CloudFront logs from `pds-logs-<venue>` needs the `pdc-cds-infra` change in runbook [Phase 6](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md#phase-6---cloudfront-pds-main). It is required only when `S3_CF_BUCKET_NAME` is set.
+- **After apply:** the instance runs the userdata bootstrap (Logstash RPM, plugins, `pdsops` account, systemd unit) but has no pipeline config and is not started. Deploy it with [First-boot setup](logstash/README.md#first-boot-setup), then [Verify the deployment](logstash/README.md#verify-the-deployment).
 - **Existing EC2:** set `manage_ec2_instance = false` to publish an externally managed instance instead. See [Using an existing EC2](logstash/README.md#using-an-existing-ec2-manage_ec2_instance--false).
 
 ### Update
