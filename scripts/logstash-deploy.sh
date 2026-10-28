@@ -82,8 +82,16 @@ ENABLED_NODES="${ENABLED_NODES:-}"
 
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 
+# The pdsops login PATH does not include /usr/local/bin, where the AWS CLI is installed.
+export PATH="/usr/local/bin:$PATH"
+
 if [ ! -f /usr/share/logstash/bin/logstash ]; then
   echo "ERROR: Logstash is not installed. An SA must run 'sudo bash scripts/logstash-bootstrap.sh' first." >&2
+  exit 1
+fi
+
+if [ -z "${OPENSEARCH_ENDPOINT:-}" ] && ! command -v aws >/dev/null 2>&1; then
+  echo "ERROR: the AWS CLI ('aws') is not on PATH. Install it, or set OPENSEARCH_ENDPOINT to skip the SSM lookup." >&2
   exit 1
 fi
 

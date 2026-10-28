@@ -143,6 +143,10 @@ for f in "$PDSOPS_HOME/.bash_profile" "$PDSOPS_HOME/.bashrc"; do
   if ! grep -q 'XDG_RUNTIME_DIR' "$f"; then
     echo 'export XDG_RUNTIME_DIR="/run/user/$(id -u)"' >> "$f"
   fi
+  # /usr/local/bin (where the AWS CLI lives) is not on the pdsops login PATH.
+  if ! grep -q '/usr/local/bin' "$f"; then
+    echo 'export PATH="/usr/local/bin:$PATH"' >> "$f"
+  fi
 done
 chown "$PDSOPS_OWNER" "$PDSOPS_HOME/.bash_profile" "$PDSOPS_HOME/.bashrc"
 
