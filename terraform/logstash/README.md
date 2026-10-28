@@ -45,7 +45,7 @@ ssh ${NASA_ID}@pds-cds-bastion-core.${ZONE}
 
 # On the bastion: set FQDN to the Target value printed above.
 FQDN="<target-fqdn>"
-ssh ${NASA_ID}@${FQDN}
+ssh ${USERNAME}@${FQDN}
 sudo -iu pdsops
 ```
 
