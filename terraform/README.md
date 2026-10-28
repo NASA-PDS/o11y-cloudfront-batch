@@ -3,7 +3,7 @@
 Reference for the three Terraform modules that deploy the PDS Web Analytics pipeline:
 
 - **`iam`**: the Logstash EC2 role and instance profile, plus the access policy that grants S3 read and OpenSearch write.
-- **`s3`**: the log bucket (versioning suspended, SSE, Intelligent-Tiering).
+- **`s3`**: the log bucket (versioning disabled, SSE, Intelligent-Tiering).
 - **`logstash`**: the Logstash EC2 (Oracle Linux 9, Logstash installed from the RPM and run by systemd).
 
 The deployment order, permission tiers, credentials setup, and the cross-repo SSM contract are owned by the o11y-platform [deployment runbook](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md). This page covers only what is specific to these modules. OpenSearch is managed in [o11y-platform](https://github.com/NASA-PDS/o11y-platform).
