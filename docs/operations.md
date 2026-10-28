@@ -10,8 +10,10 @@ logs, config updates) never require sudo once you are the `pdsops` user.
   [Access model](../terraform/logstash/README.md#access-model).
 - **Verify a deployment:** see
   [Verify the deployment](../terraform/logstash/README.md#verify-the-deployment).
-- **Deploy order across repos:** see the
-  [o11y-platform first deployment](https://github.com/NASA-PDS/o11y-platform#first-deployment).
+- **First deploy on a new instance:** see
+  [First-boot setup](../terraform/logstash/README.md#first-boot-setup).
+- **Deploy order across repos:** see the o11y-platform
+  [Initial deployment](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md#initial-deployment).
 
 ## Quick reference (from the EC2, as the pdsops user)
 
@@ -113,6 +115,36 @@ systemctl --user start logstash
 > system administrator runs it (via SSM). It is not needed for routine
 > operations, nor at first boot on Terraform-managed instances (userdata does it).
 
+## Update pipeline configuration
+
+A config change needs no Terraform and no sudo. The deploy script is idempotent: it pulls the repo, redeploys the config, rebuilds the pipelines, and restarts Logstash.
+
+1. Edit the files under `config/logstash/config/` locally:
+
+   | File | Purpose |
+   |---|---|
+   | `shared/pds-filter.conf` | Log parsing, field mapping, enrichment |
+   | `shared/pds-output-opensearch.conf` | OpenSearch index and routing settings |
+   | `inputs/pds-input-s3-<node>.conf` | Per-node S3 prefix and metadata |
+   | `logstash.yml` | JVM, queue, and pipeline settings |
+   | `plugins/regexes.yaml` | User-agent regex patterns (see below) |
+
+2. Test the change with the [pipeline integration tests](../tests/README.md#running-the-integration-tests-with-docker).
+3. Merge to `main`, or push a branch and deploy it with `REPO_BRANCH`.
+4. On the EC2 as `pdsops`, re-run the deploy script from the [Quick reference](#quick-reference-from-the-ec2-as-the-pdsops-user) ("Update config").
+5. Check the result with [Verify the deployment](../terraform/logstash/README.md#verify-the-deployment).
+
+### Update `regexes.yaml`
+
+`regexes.yaml` comes from [ua-parser/uap-core](https://github.com/ua-parser/uap-core/blob/master/regexes.yaml). The `logstash-filter-useragent` plugin uses it to detect browsers, bots, and operating systems. Refresh it a few times a year to pick up new signatures:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ua-parser/uap-core/master/regexes.yaml \
+  -o config/logstash/config/plugins/regexes.yaml
+```
+
+Then follow steps 2 to 5 above.
+
 ## Monitoring
 
 **On the EC2 (as the pdsops user — no sudo):**
@@ -194,7 +226,7 @@ the true document count at the API level.
    - As of the fix for this, `logstash-deploy.sh` also now warns loudly at deploy time if
      `S3_CF_BUCKET_NAME` is empty, and preserves the last-configured value across redeploys instead of
      silently resetting it to empty when the var isn't passed — but always pass it explicitly on a
-     first-time manual install (see Step 4 of [`terraform/README.md`](../terraform/README.md)).
+     first-time manual install (see [First-boot setup](../terraform/logstash/README.md#first-boot-setup)).
 
 4. **High memory usage**
    - Adjust `pipeline.batch.size` in `config/logstash/config/logstash.yml`
