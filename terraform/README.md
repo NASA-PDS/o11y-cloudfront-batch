@@ -21,12 +21,7 @@ terraform/
 | `s3` | [Phase 3](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md#phase-3---batch-s3-and-logstash-ec2) | Power User | `o11y-cloudfront-batch/s3.tfstate` | `/pds/o11y-cloudfront-batch/s3/bucket_name` |
 | `logstash` | [Phase 3](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md#phase-3---batch-s3-and-logstash-ec2) | Platform Engineer | `o11y-cloudfront-batch/logstash.tfstate` | `/pds/o11y-cloudfront-batch/ec2/logstash_security_group_id`, `.../logstash_instance_id`, `.../logstash_fqdn` |
 
-Each module's venue inputs are in `cds-infra-deploy` at `venues/<venue>/o11y-cloudfront-batch/<module>/terragrunt.hcl`. Apply a module from a `cds-infra-deploy` checkout, with the variables and credentials from the runbook [Prerequisites](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md#prerequisites):
-
-```bash
-task plan  VENUE="${VENUE}" COMPONENT=o11y-cloudfront-batch/<module>
-task apply VENUE="${VENUE}" COMPONENT=o11y-cloudfront-batch/<module>
-```
+Each module's venue inputs are in `cds-infra-deploy` at `venues/<venue>/o11y-cloudfront-batch/<module>/terragrunt.hcl`. Apply each module in its runbook phase from the table above. The phase's Setup block assigns `VENUE`, `REGION`, the credentials for its permission tier, and the `cds-infra-deploy` directory, and its steps give the exact `task` commands.
 
 Reaching the Logstash instance also needs SSH access to the CDS bastion host (your key enrolled for bastion access). System administrators, and developers in dev, who use SSM Session Manager need the [Session Manager plugin](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html).
 
@@ -72,12 +67,30 @@ Pipeline config and `regexes.yaml` changes need no Terraform: see [Update pipeli
 
 ## Teardown
 
-Destroy in reverse order from a `cds-infra-deploy` checkout. Roles must outlive the resources that use them.
+Destroy in reverse order from a `cds-infra-deploy` checkout. Roles must outlive the resources that use them. Use the same permission tier as the phase that created each module.
 
 ```bash
-task destroy VENUE="${VENUE}" COMPONENT=o11y-cloudfront-batch/logstash   # Platform Engineer
-task destroy VENUE="${VENUE}" COMPONENT=o11y-cloudfront-batch/s3         # Power User
-task destroy VENUE="${VENUE}" COMPONENT=o11y-cloudfront-batch/iam        # Admin
+VENUE="dev"                                       # dev | test | prod
+REGION="us-west-2"
+CDS_INFRA_DEPLOY_DIR="<path-to-cds-infra-deploy-checkout>"
+PROFILE_ADMIN="<admin-sso-profile>"
+PROFILE_PLATFORM_ENGINEER="<platform-engineer-sso-profile>"
+PROFILE_POWER_USER="<power-user-sso-profile>"
+
+export AWS_DEFAULT_REGION="${REGION}"
+cd "${CDS_INFRA_DEPLOY_DIR}"
+
+eval $(aws configure export-credentials --profile "${PROFILE_PLATFORM_ENGINEER}" --format env)
+unset AWS_PROFILE
+task destroy VENUE="${VENUE}" COMPONENT=o11y-cloudfront-batch/logstash
+
+eval $(aws configure export-credentials --profile "${PROFILE_POWER_USER}" --format env)
+unset AWS_PROFILE
+task destroy VENUE="${VENUE}" COMPONENT=o11y-cloudfront-batch/s3
+
+eval $(aws configure export-credentials --profile "${PROFILE_ADMIN}" --format env)
+unset AWS_PROFILE
+task destroy VENUE="${VENUE}" COMPONENT=o11y-cloudfront-batch/iam
 ```
 
 The full-stack teardown order is in the runbook [Teardown](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md#teardown).
