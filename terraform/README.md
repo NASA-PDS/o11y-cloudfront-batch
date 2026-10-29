@@ -56,6 +56,41 @@ The in-place and replacement rules come from the shared `ec2` module in [pdc-tf-
 
 Pipeline config and `regexes.yaml` changes need no Terraform: see [Update pipeline configuration](../docs/operations.md#update-pipeline-configuration).
 
+## Local iteration
+
+For local runs only. Operational deploys use Terragrunt from `cds-infra-deploy`. The Task wrapper reads this repo's gitignored tfvars; `task --list` shows all tasks.
+
+**Setup**
+
+```bash
+VENUE="dev"                                       # dev | test | prod
+PROFILE_NAME="<sso-profile>"
+TFSTATE_BUCKET="<terraform-state-bucket>"
+O11Y_BATCH_DIR="<path-to-this-checkout>"
+
+eval $(aws configure export-credentials --profile "${PROFILE_NAME}" --format env)
+unset AWS_PROFILE
+export TFSTATE_BUCKET
+cd "${O11Y_BATCH_DIR}/terraform"
+```
+
+**Steps**
+
+1. Copy the example tfvars, then edit them. Examples exist for `dev` and `prod` only, and `logstash` has none: write `logstash/tfvars/${VENUE}.tfvars` from the inputs in [`logstash/README.md`](logstash/README.md).
+
+   ```bash
+   cp -p tfvars/common.tfvars.example "tfvars/common-${VENUE}.tfvars"
+   for MODULE in iam s3; do
+     cp -p "${MODULE}/tfvars/${VENUE}.tfvars.example" "${MODULE}/tfvars/${VENUE}.tfvars"
+   done
+   ```
+
+2. Plan a module:
+
+   ```bash
+   task s3:plan VENUE="${VENUE}"
+   ```
+
 ## Teardown
 
 Destroy in reverse order, with the tier that created each module: `logstash`, then `s3`, then `iam`. Roles must outlive the resources that use them. The full-stack order, including the OpenSearch access flags that must be turned off first, and the credentials commands are in the runbook [Teardown](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md#teardown).
