@@ -63,7 +63,7 @@ variable "logstash_root_volume_size" {
 variable "logstash_version" {
   description = "Logstash RPM version to install"
   type        = string
-  default     = "8.18.0"
+  default     = "8.19.23"
 }
 
 variable "ami_id" {

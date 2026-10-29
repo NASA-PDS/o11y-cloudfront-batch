@@ -28,7 +28,7 @@
 # to clone the repo, deploy config, and start the service.
 #
 # Env overrides:
-#   LOGSTASH_VERSION — Logstash version to install if missing (default: 8.18.0)
+#   LOGSTASH_VERSION — Logstash version to install if missing (default: 8.19.23)
 #   REPO_DIR         — path to hand off repo ownership if already on disk (default: /opt/o11y-cloudfront-batch)
 
 set -euo pipefail
@@ -38,7 +38,7 @@ if [ "$(id -u)" -ne 0 ]; then
   exit 1
 fi
 
-LOGSTASH_VERSION="${LOGSTASH_VERSION:-8.18.0}"
+LOGSTASH_VERSION="${LOGSTASH_VERSION:-8.19.23}"
 REPO_DIR="${REPO_DIR:-/opt/o11y-cloudfront-batch}"
 PDSOPS_USER="pdsops"
 PDSOPS_HOME="$(getent passwd "$PDSOPS_USER" | cut -d: -f6)"

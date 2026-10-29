@@ -43,7 +43,7 @@ Cross-repo parameters are in the [SSM contract](https://github.com/NASA-PDS/o11y
 | `bastion_target_sg_ssm_path` | `string` | `""` | SSM path of the bastion target security group. Required when `manage_ec2_instance = true`. |
 | `logstash_instance_type` | `string` | `t3.large` | Instance type. |
 | `logstash_root_volume_size` | `number` | `50` | Root volume in GB; at least the AMI snapshot size (32). |
-| `logstash_version` | `string` | `8.18.0` | Logstash RPM version, baked into userdata. |
+| `logstash_version` | `string` | `8.19.23` | Logstash RPM version, baked into userdata. |
 | `venue` | `string` | - | Deployment venue (`dev`, `test`, `prod`). |
 | `tenant`, `component`, `cicd`, `managedby` | `string` | - | Tags. |
 | `aws_region` | `string` | `us-west-2` | AWS region. |

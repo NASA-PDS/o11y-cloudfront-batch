@@ -12,7 +12,7 @@
 # by cloud-init at /var/log/cloud-init-output.log.
 #
 # Template variables (substituted by Terraform templatefile):
-#   logstash_version - Logstash RPM version to install (e.g. 8.18.0)
+#   logstash_version - Logstash RPM version to install (e.g. 8.19.23)
 set -euo pipefail
 
 exec > >(tee /var/log/logstash-bootstrap.log) 2>&1
