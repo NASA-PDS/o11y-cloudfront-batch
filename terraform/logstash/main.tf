@@ -59,10 +59,8 @@ resource "aws_vpc_security_group_egress_rule" "logstash_all_outbound" {
   cidr_ipv4         = "0.0.0.0/0"
 }
 
-# TODO: change ref back to develop (or a release tag) before merging this branch to develop.
-# feature/ec2-instance-type-in-place-resize is not yet merged into pdc-tf-modules develop.
 module "ec2" {
-  source = "git@github.com:NASA-PDS/pdc-tf-modules.git//terraform/modules/ec2?ref=feature/ec2-instance-type-in-place-resize"
+  source = "git@github.com:NASA-PDS/pdc-tf-modules.git//terraform/modules/ec2?ref=develop"
   count  = var.manage_ec2_instance ? 1 : 0
 
   ami_id                     = var.ami_id

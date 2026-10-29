@@ -150,13 +150,25 @@ Prerequisites on the instance, outside this module's control:
 
 ## First-boot setup
 
-**Terraform-created instances:** userdata runs the full bootstrap (packages, Logstash and plugins, `pdsops` setup, systemd unit). Allow 5-10 minutes after `task apply`; progress is in `/var/log/logstash-bootstrap.log`.
+**Terraform-created instances:** userdata runs the full bootstrap (packages, Logstash and plugins, `pdsops` setup, systemd unit). Allow at least 10 minutes after `task apply`; it takes longer while the instance applies its own OS updates, which hold the package lock. Progress is in `/var/log/logstash-bootstrap.log`.
 
 **Existing EC2s:** a system administrator runs `scripts/logstash-bootstrap.sh` as root once (see the script header).
 
 **Operator steps (no sudo, both cases):**
 
-1. Connect and switch to `pdsops` ([Access model](#access-model)).
+1. Connect and switch to `pdsops` ([Access model](#access-model)). On a Terraform-created instance, follow the bootstrap log until it finishes (press Ctrl-C once `=== Bootstrap complete ===` appears). Deploying earlier fails with `Logstash is not installed`.
+
+   ```bash
+   tail -f /var/log/logstash-bootstrap.log
+   ```
+
+   If the log stops at `Waiting for process with pid ... to finish.`, another package job holds the lock. Look up that PID and wait for it to end:
+
+   ```bash
+   ps -eo pid,etime,stat,cmd | grep -E "dnf|rpm" | grep -v grep
+   ```
+
+   If nothing changes for 15 minutes, ask a system administrator to end that job with `sudo kill` and rerun `logstash-bootstrap.sh`.
 2. Set the deploy variables. `S3_CF_BUCKET_NAME` is required on a first deploy: unset, it breaks the EN pipeline at runtime. It is the CloudFront logs bucket that pdc-cds-infra `pds-main` publishes to SSM (after [Phase 6](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md#phase-6---cloudfront-pds-main)). Look it up with your workstation credentials, or use `""` only if EN is not enabled:
 
    ```bash
