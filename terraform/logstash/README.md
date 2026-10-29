@@ -186,7 +186,7 @@ follow the operator steps below.
 
    export S3_CF_BUCKET_NAME REPO_BRANCH ENABLED_NODES EGRESS_REPORT_RECIPIENTS
    ```
-3. Deploy the config and start the service. The script and the config come from `REPO_BRANCH`.
+3. Deploy the config and start the service. The script and the config come from `REPO_BRANCH`. The script enables the service and restarts it, so re-running it is also how you apply a config change.
 
    ```bash
    bash <(curl -fsSL "https://raw.githubusercontent.com/NASA-PDS/o11y-cloudfront-batch/${REPO_BRANCH}/scripts/logstash-deploy.sh")
@@ -207,11 +207,13 @@ follow the operator steps below.
 ### Day-2 operations — no sudo
 
 Connect as `pdsops` ([Access model](#access-model)). Then:
-- `bash scripts/logstash-deploy.sh` — pull latest config and restart
+- `bash scripts/logstash-deploy.sh` — pull latest config and restart. Use this for any config change; a bare `restart` does not pick up repo changes.
 - `systemctl --user restart logstash` — restart without config change
+- `systemctl --user stop logstash` / `systemctl --user start logstash` — stop or start the service
+- `systemctl --user is-active logstash` — confirm `active` after any stop, start, or restart
 - `tail -f /var/log/logstash/logstash-plain.log` — live logs
 
-See the [Operations Runbook](../../docs/operations.md) for the full list.
+See [Service control](../../docs/operations.md#quick-reference-from-the-ec2-as-the-pdsops-user) in the Operations Runbook for when to use each and for the full list.
 
 The only operation that ever requires root again is running
 `scripts/logstash-bootstrap.sh` for a deliberate admin action such as a
@@ -263,7 +265,17 @@ Prerequisite: o11y-platform's `opensearch` module has been re-applied with `o11y
 bash /opt/o11y-cloudfront-batch/scripts/smoke-test.sh
 ```
 
-Expected result: exit code 0 with every check passing. The script checks the Logstash RPM, linger, deployed pipeline configs, S3 access, OpenSearch reachability and SigV4 auth, and the service state. OpenSearch `status=green` is expected; `yellow` is acceptable on a single-node dev cluster.
+Expected result: exit code 0, every check `PASS`.
+
+| Check | Expected result |
+|---|---|
+| S3 buckets | `PASS` for the log bucket and the CloudFront logs bucket (`SKIP` if `S3_CF_BUCKET_NAME` is empty) |
+| OpenSearch | `PASS`; `status=green` (`yellow` is acceptable on a single-node dev cluster) |
+| Service and API | `active`; `localhost:9600` responds |
+| Pipelines | every pipeline in `/etc/logstash/pipelines.yml` running |
+| Log | no `ERROR`/`FATAL` since the service started |
+
+The API and pipeline checks wait up to 120 seconds after a start (`SMOKE_WAIT_SECS` to change). Data ingestion is confirmed in the next step.
 
 ### 4. Data flow
 

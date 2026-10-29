@@ -20,10 +20,22 @@ logs, config updates) never require sudo once you are the `pdsops` user.
 **Service control (no sudo):**
 ```bash
 systemctl --user status logstash
+systemctl --user stop logstash
+systemctl --user start logstash
 systemctl --user restart logstash
 # journalctl requires adm/wheel group membership — use the log file instead:
 tail -f /var/log/logstash/logstash-plain.log
 ```
+
+When to restart:
+
+| Situation | What to run |
+|---|---|
+| Config changed in the repo (filters, inputs, outputs, `logstash.yml`, `regexes.yaml`) | Re-run the deploy script below. It rebuilds the pipelines and restarts Logstash. A bare `restart` does not pick up repo changes. |
+| Logstash is hung, or you want an S3 input to poll now (EN inputs poll every 15 minutes, other nodes every 2 hours) | `systemctl --user restart logstash` |
+| Clearing S3 read history | `stop`, delete the sincedb files, then `start` (see below) |
+
+After any stop, start, or restart, wait for the command to return (shutdown can take about a minute), then run the [smoke test](../terraform/logstash/README.md#3-smoke-test). Logstash starts again after an instance reboot.
 
 **Update config (pull latest from GitHub and restart, no sudo):**
 ```bash
@@ -131,7 +143,7 @@ A config change needs no Terraform and no sudo. The deploy script is idempotent:
 
 2. Test the change with the [pipeline integration tests](../tests/README.md#running-the-integration-tests-with-docker).
 3. Merge to `main`, or push a branch and deploy it with `REPO_BRANCH`.
-4. On the EC2 as `pdsops`, re-run the deploy script from the [Quick reference](#quick-reference-from-the-ec2-as-the-pdsops-user) ("Update config").
+4. On the EC2 as `pdsops`, re-run the deploy script from the [Quick reference](#quick-reference-from-the-ec2-as-the-pdsops-user) ("Update config"). The script restarts Logstash; no separate restart is needed.
 5. Check the result with [Verify the deployment](../terraform/logstash/README.md#verify-the-deployment).
 
 ### Update `regexes.yaml`
@@ -165,9 +177,11 @@ tail -f /var/log/logstash-deploy.log
 ```
 
 **Real-time throughput (is it processing right now?):** Logstash exposes a
-monitoring API on `localhost:9600`. Note each S3 input only polls every 2
-hours (`interval => 7200`) — a freshly uploaded file won't show up until
-the next poll, or restart the service to force one immediately.
+monitoring API on `localhost:9600`. Note each S3 input only polls on its
+`interval` (900 seconds for EN, 7200 seconds for the other nodes) — a freshly
+uploaded file won't show up until the next poll, or restart the service to
+force one immediately. A quiet log is normal between polls; use the smoke test or
+the API below to tell whether Logstash is running now.
 
 ```bash
 # Per-pipeline in/out event counts, queue depth, worker/duration stats
