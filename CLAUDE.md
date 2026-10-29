@@ -152,7 +152,7 @@ The OpenSearch index template (`config/opensearch/ecs-8.17-custom-template.json`
 ### Testing Strategy
 
 - **Unit tests**: `tests/test_s3_sync.py`, `tests/test_egress_report.py`, `tests/test_logstash_build_config.py`
-- **Integration tests** (`tests/test_logstash_integration.py`): the shared filter against sample input; see `tests/README.md`
+- **Integration tests** (`tests/test_logstash_integration.py`): the shared filter against sample input; (`tests/test_logstash_log_years.py`): the `LOG_YEARS`-built S3 inputs against a fake S3 server; see `tests/README.md`
 - **Test data**: inline `generator` inputs in `tests/config/test-input-*.conf`; CloudFront samples in `tests/data/`
 - **Pytest markers**: `unit`, `integration`, `slow`, `s3`, `cli`, `gzip`, `regression`
 

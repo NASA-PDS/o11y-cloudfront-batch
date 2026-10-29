@@ -92,4 +92,4 @@ RUN mkdir -p /app/output
 
 ENV OUTPUT_DIR=/app/output
 
-CMD ["python", "-m", "unittest", "tests.test_logstash_integration", "-v"]
+CMD ["python", "-m", "unittest", "tests.test_logstash_integration", "tests.test_logstash_log_years", "-v"]

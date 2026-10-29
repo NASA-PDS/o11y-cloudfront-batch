@@ -3,6 +3,7 @@
 | File | Covers |
 |---|---|
 | `test_logstash_integration.py` | Runs `shared/pds-filter.conf` against sample input and checks event counts per output directory |
+| `test_logstash_log_years.py` | Runs the real input configs, built with `LOG_YEARS`, in Logstash against a fake S3 server (moto) and checks which objects are ingested |
 | `test_logstash_build_config.py` | `scripts/logstash_build_config.sh`, including `ENABLED_NODES`, `LOG_YEARS` and the year `exclude_pattern` |
 | `test_sample_logs.py` | `copy-sample-logs` |
 | `test_s3_sync.py` | The deprecated `s3-log-sync` tool |
@@ -52,6 +53,14 @@ docker compose run --rm test python3 -m unittest \
 ```
 
 Without Docker, run `python -m unittest tests.test_logstash_integration -v` with `logstash` on the `PATH`. Each pipeline run has a 5-minute timeout.
+
+`docker compose run --rm test` runs both integration modules. To run only the `LOG_YEARS` tests, which start Logstash three or four times and take several minutes:
+
+```bash
+docker compose run --rm test python -m unittest tests.test_logstash_log_years -v
+```
+
+After changing the repo or the dev dependencies, rebuild first with `docker compose build test`.
 
 ### Reading the output
 
