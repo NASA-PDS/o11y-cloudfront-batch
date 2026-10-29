@@ -62,17 +62,20 @@ fi
 
 echo "--- Installing Logstash $LOGSTASH_VERSION ---"
 rpm --import https://artifacts.elastic.co/GPG-KEY-elasticsearch
+# The repo is disabled by default so routine `dnf update` runs cannot upgrade
+# Logstash: an RPM upgrade resets ownership of /var/log/logstash and the other
+# directories handed to pdsops below. Installs name the repo explicitly.
 cat > /etc/yum.repos.d/elastic.repo <<'REPO'
 [elasticsearch]
 name=Elasticsearch repository for 8.x packages
 baseurl=https://artifacts.elastic.co/packages/8.x/yum
 gpgcheck=1
 gpgkey=https://artifacts.elastic.co/GPG-KEY-elasticsearch
-enabled=1
+enabled=0
 autorefresh=1
 type=rpm-md
 REPO
-dnf install -y "logstash-$LOGSTASH_VERSION"
+dnf install -y --enablerepo=elasticsearch "logstash-$LOGSTASH_VERSION"
 echo "Logstash $LOGSTASH_VERSION installed"
 
 # ----------------------------------------
