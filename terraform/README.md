@@ -1,51 +1,47 @@
 # o11y-cloudfront-batch - Terraform
 
-Reference for the three Terraform modules that deploy the PDS Web Analytics pipeline:
+Three modules deploy the PDS Web Analytics pipeline:
 
-- **`iam`**: the Logstash EC2 role and instance profile, plus the access policy that grants S3 read and OpenSearch write.
-- **`s3`**: the log bucket (versioning enabled with noncurrent versions expiring after 14 days, SSE, Intelligent-Tiering).
-- **`logstash`**: the Logstash EC2 (Oracle Linux 9, Logstash installed from the RPM and run by systemd).
+- **`iam`**: the Logstash EC2 role and instance profile, plus the policy granting S3 read, OpenSearch write, and SMTP-config read.
+- **`s3`**: the log bucket (versioned, SSE, Intelligent-Tiering).
+- **`logstash`**: the Logstash EC2 (Oracle Linux 9, Logstash from the RPM, run by systemd).
 
-The deployment order, permission tiers, credentials setup, and the cross-repo SSM contract are owned by the o11y-platform [deployment runbook](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md). This page covers only what is specific to these modules. OpenSearch is managed in [o11y-platform](https://github.com/NASA-PDS/o11y-platform).
+The deployment order, permission tiers, credentials setup, and cross-repo SSM contract are owned by the o11y-platform [deployment runbook](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md). This page covers only what is specific to these modules. OpenSearch is managed in [o11y-platform](https://github.com/NASA-PDS/o11y-platform).
 
 ```text
 terraform/
   ├── iam/         # EC2 role + profile, access policy
   ├── s3/          # S3 log bucket
-  └── logstash/    # Logstash EC2, security group, DNS record
+  ├── logstash/    # Logstash EC2, security group, DNS record
+  └── templates/   # Logstash userdata
 ```
 
-| Module | Runbook phase | State key |
-|---|---|---|
-| `iam` | [Phase 2a](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md#phase-2---iam) | `o11y-cloudfront-batch/iam.tfstate` |
-| `s3` | [Phase 3](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md#phase-3---batch-s3-and-logstash-ec2) | `o11y-cloudfront-batch/s3.tfstate` |
-| `logstash` | [Phase 3](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md#phase-3---batch-s3-and-logstash-ec2) | `o11y-cloudfront-batch/logstash.tfstate` |
+| Module | Tier | Runbook phase | State key |
+|---|---|---|---|
+| `iam` | Admin | [Phase 2a](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md#phase-2---iam) | `o11y-cloudfront-batch/iam.tfstate` |
+| `s3` | Power User | [Phase 3](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md#phase-3---batch-s3-and-logstash-ec2) | `o11y-cloudfront-batch/s3.tfstate` |
+| `logstash` | Platform Engineer | [Phase 3](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md#phase-3---batch-s3-and-logstash-ec2) | `o11y-cloudfront-batch/logstash.tfstate` |
 
-Each module's venue inputs are in `cds-infra-deploy` at `venues/<venue>/o11y-cloudfront-batch/<module>/terragrunt.hcl`. Apply each module in its runbook phase from the table above. The phase's Setup block assigns `VENUE`, `REGION`, the credentials for its permission tier, and the `cds-infra-deploy` directory, and its steps give the exact `task` commands.
-
-Reaching the Logstash instance also needs SSH access to the CDS bastion host (your key enrolled for bastion access). System administrators, and developers in dev, who use SSM Session Manager need the [Session Manager plugin](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html).
+Each module's venue inputs are in `cds-infra-deploy` at `venues/<venue>/o11y-cloudfront-batch/<module>/terragrunt.hcl`. Apply each module in its runbook phase; the phase's Setup block assigns the variables and credentials for its tier, and its steps give the `task` commands. Reaching the instance afterwards is covered in the [Access model](logstash/README.md#access-model).
 
 ## iam
 
-Creates `<venue>-o11y-cloudfront-batch-ec2-role`, its instance profile, and the S3 and OpenSearch access policy attached to the role. `roles.tf` and `policies.tf` share one state.
+Inputs, resources, and outputs: [`iam/README.md`](iam/README.md).
 
-- **Apply and verify:** [Phase 2a](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md#phase-2---iam).
 - **Update:** edit the policy documents in `iam/policies.tf` and re-apply. The policy updates in place.
 
 ## s3
 
-Creates the bucket that receives PDS node access logs.
+Inputs, resources, and outputs: [`s3/README.md`](s3/README.md).
 
-- **Apply and verify:** [Phase 3](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md#phase-3---batch-s3-and-logstash-ec2).
 - **Update:** lifecycle, encryption, and versioning changes take effect on re-apply.
 
 ## logstash
 
-Creates the Logstash EC2, its security group, and a Route53 A record. The security group ID is published to SSM so o11y-platform can allow HTTPS from it. Module inputs, SSM dependencies, and outputs are in [`logstash/README.md`](logstash/README.md).
+Inputs, SSM parameters, and outputs: [`logstash/README.md`](logstash/README.md).
 
-- **Apply and verify:** [Phase 3](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md#phase-3---batch-s3-and-logstash-ec2).
-- **After apply:** the instance runs the userdata bootstrap (Logstash RPM, plugins, `pdsops` account, systemd unit) but has no pipeline config and is not started. Deploy it with [First-boot setup](logstash/README.md#first-boot-setup), then [Verify the deployment](logstash/README.md#verify-the-deployment).
-- **Existing EC2:** set `manage_ec2_instance = false` to publish an externally managed instance instead. See [Using an existing EC2](logstash/README.md#using-an-existing-ec2-manage_ec2_instance--false).
+- **After apply:** the instance has bootstrapped Logstash but has no pipeline config and is not started. Deploy it with [First-boot setup](logstash/README.md#first-boot-setup), then [Verify the deployment](logstash/README.md#verify-the-deployment).
+- **Existing EC2:** `manage_ec2_instance = false` publishes an externally managed instance instead. See [Using an existing EC2](logstash/README.md#using-an-existing-ec2-manage_ec2_instance--false).
 
 ### Update
 
@@ -62,36 +58,10 @@ Pipeline config and `regexes.yaml` changes need no Terraform: see [Update pipeli
 
 ## Teardown
 
-Destroy in reverse order from a `cds-infra-deploy` checkout. Roles must outlive the resources that use them. Use the same permission tier as the phase that created each module.
+Destroy in reverse order, with the tier that created each module: `logstash`, then `s3`, then `iam`. Roles must outlive the resources that use them. The full-stack order, including the OpenSearch access flags that must be turned off first, and the credentials commands are in the runbook [Teardown](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md#teardown).
 
-```bash
-VENUE="dev"                                       # dev | test | prod
-REGION="us-west-2"
-CDS_INFRA_DEPLOY_DIR="<path-to-cds-infra-deploy-checkout>"
-PROFILE_ADMIN="<admin-sso-profile>"
-PROFILE_PLATFORM_ENGINEER="<platform-engineer-sso-profile>"
-PROFILE_POWER_USER="<power-user-sso-profile>"
+## Notes
 
-export AWS_DEFAULT_REGION="${REGION}"
-cd "${CDS_INFRA_DEPLOY_DIR}"
-
-eval $(aws configure export-credentials --profile "${PROFILE_PLATFORM_ENGINEER}" --format env)
-unset AWS_PROFILE
-task destroy VENUE="${VENUE}" COMPONENT=o11y-cloudfront-batch/logstash
-
-eval $(aws configure export-credentials --profile "${PROFILE_POWER_USER}" --format env)
-unset AWS_PROFILE
-task destroy VENUE="${VENUE}" COMPONENT=o11y-cloudfront-batch/s3
-
-eval $(aws configure export-credentials --profile "${PROFILE_ADMIN}" --format env)
-unset AWS_PROFILE
-task destroy VENUE="${VENUE}" COMPONENT=o11y-cloudfront-batch/iam
-```
-
-The full-stack teardown order is in the runbook [Teardown](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md#teardown).
-
-## Architecture notes
-
-- **State** is stored in S3 in the venue's infra bucket, under the keys in the table above. The OpenSearch state (`o11y-platform/opensearch.tfstate`) is managed in o11y-platform.
-- **Variable naming:** `s3_bucket_prefix` is for the S3 bucket name only and may include a CI/CD identifier. `resource_prefix` is for all other resources and should not.
-- **VPC and security group values** are Terragrunt inputs in `cds-infra-deploy`. TODO: source them from SSM under `/pds/cds-infra/vpc/` once published.
+- **State** is in the venue's infra bucket under the keys above. The OpenSearch state (`o11y-platform/opensearch.tfstate`) belongs to o11y-platform.
+- **Variable naming:** `s3_bucket_prefix` is for the S3 bucket name only and may include a CI/CD identifier.
+- **VPC and security group IDs** are Terragrunt inputs. TODO: source them from SSM under `/pds/cds-infra/vpc/` once published.

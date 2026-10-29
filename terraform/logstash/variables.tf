@@ -4,12 +4,6 @@ variable "aws_region" {
   default     = "us-west-2"
 }
 
-variable "partition" {
-  description = "AWS partition (aws, aws-us-gov, aws-cn)"
-  type        = string
-  default     = "aws"
-}
-
 variable "tenant" {
   description = "Tag value for Tenant"
   type        = string
@@ -32,11 +26,6 @@ variable "component" {
 
 variable "managedby" {
   description = "Tag value for owner managing the resource"
-  type        = string
-}
-
-variable "resource_prefix" {
-  description = "Prefix for all resources (e.g. pds-dev). No CI/CD pipeline identifiers."
   type        = string
 }
 
@@ -77,22 +66,10 @@ variable "logstash_version" {
   default     = "8.18.0"
 }
 
-variable "s3_cf_bucket_name" {
-  description = "Name of the S3 bucket containing CloudFront access logs (EN node only). Leave empty to skip."
-  type        = string
-  default     = ""
-}
-
 variable "ami_id" {
   description = "AMI ID for the Logstash EC2 instance. Required when manage_ec2_instance = true."
   type        = string
   default     = ""
-}
-
-variable "repo_branch" {
-  description = "Branch of the o11y-cloudfront-batch repo to clone at EC2 first boot."
-  type        = string
-  default     = "main"
 }
 
 variable "bastion_target_sg_ssm_path" {

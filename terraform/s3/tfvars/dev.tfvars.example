@@ -1,9 +1,7 @@
 # S3 root-module dev values — copy to dev.tfvars and fill in values.
-# Shared values (aws_region, partition, resource_prefix, etc.) are in common-dev.tfvars.
+# Shared values (aws_region, partition, etc.) are in common-dev.tfvars.
 
 venue     = "dev"
 managedby = "<your-email>"
 
-s3_bucket_prefix = ""  # e.g. pds-dev-gh01dc — the "gh01dc" is a legacy artifact of an early
-                        # GitHub CD/OIDC deploy design (since dropped); the live bucket keeps
-                        # this prefix since it was never renamed. See terraform/s3/README.md.
+s3_bucket_prefix = ""  # bucket is named <prefix>-web-analytics; e.g. pds-dev

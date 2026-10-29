@@ -42,7 +42,7 @@ variable "ec2users_dynamodb_table_arn" {
 
 variable "logs_s3_bucket_name" {
   type        = string
-  description = "Full name of the S3 logs bucket (e.g. pds-logs-dev)"
+  description = "Full name of the log bucket created by the s3 module (<s3_bucket_prefix>-web-analytics). Not the CloudFront logs bucket."
 }
 
 variable "smtp_config_ssm_path" {
