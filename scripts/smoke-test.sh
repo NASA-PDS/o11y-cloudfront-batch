@@ -102,11 +102,15 @@ while True:
         sys.exit(1)
     time.sleep(5)
 
+def section(p, name):
+    # The API reports null (not a missing key) for sections with no data yet.
+    return pipelines[p].get(name) or {}
+
 summary = ', '.join(
-    f"{p}(in={pipelines[p].get('events', {}).get('in', 0)} out={pipelines[p].get('events', {}).get('out', 0)})"
+    f"{p}(in={section(p, 'events').get('in') or 0} out={section(p, 'events').get('out') or 0})"
     for p in expected
 )
-failed = [p for p in expected if pipelines[p].get('reloads', {}).get('failures', 0)]
+failed = [p for p in expected if section(p, 'reloads').get('failures')]
 if failed:
     print('reload failures: ' + ', '.join(failed))
     sys.exit(1)
