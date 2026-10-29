@@ -3,12 +3,40 @@
 | File | Covers |
 |---|---|
 | `test_logstash_integration.py` | Runs `shared/pds-filter.conf` against sample input and checks event counts per output directory |
-| `test_logstash_build_config.py` | `scripts/logstash_build_config.sh`, including `ENABLED_NODES` |
+| `test_logstash_build_config.py` | `scripts/logstash_build_config.sh`, including `ENABLED_NODES`, `LOG_YEARS` and the year `exclude_pattern` |
+| `test_sample_logs.py` | `copy-sample-logs` |
 | `test_s3_sync.py` | The deprecated `s3-log-sync` tool |
 | `test_egress_report.py` | `egress_report.py` |
 | `conftest.py` | Shared helpers |
 
 Run the Python unit tests with `pytest`, or all supported Python versions and lint with `tox`. The integration tests need Logstash, so run them in Docker.
+
+## Testing against real S3 objects in a non-prod venue
+
+`copy-sample-logs` copies a small sample of objects, with their keys, from the real buckets into the venue's buckets, so you can deploy with `LOG_YEARS` and check what is ingested. It reads the prefixes from `config/logstash/config/inputs/`, drops keys each input's `exclude_pattern` skips, and picks `--per-prefix` objects evenly across each listing so every year present is represented. It prints the plan unless `--execute` is given, and refuses a destination bucket equal to the source.
+
+```bash
+SRC_PROFILE="<profile-that-can-read-the-source-buckets>"
+DST_PROFILE="<profile-that-can-write-the-venue-buckets>"
+SRC_BUCKET="<source-node-logs-bucket>"
+DST_BUCKET="<venue-node-logs-bucket>"
+SRC_CF_BUCKET="<source-cloudfront-logs-bucket>"
+DST_CF_BUCKET="<venue-cloudfront-logs-bucket>"
+
+# Print the plan for two nodes:
+copy-sample-logs --src-profile "${SRC_PROFILE}" --dst-profile "${DST_PROFILE}" \
+    --src-bucket "${SRC_BUCKET}" --dst-bucket "${DST_BUCKET}" \
+    --src-cf-bucket "${SRC_CF_BUCKET}" --dst-cf-bucket "${DST_CF_BUCKET}" \
+    --nodes geo naif
+
+# Copy it:
+copy-sample-logs --src-profile "${SRC_PROFILE}" --dst-profile "${DST_PROFILE}" \
+    --src-bucket "${SRC_BUCKET}" --dst-bucket "${DST_BUCKET}" \
+    --src-cf-bucket "${SRC_CF_BUCKET}" --dst-cf-bucket "${DST_CF_BUCKET}" \
+    --nodes geo naif --execute
+```
+
+Omit the two CloudFront options to skip EN's CloudFront inputs. Then deploy to the venue with `LOG_YEARS` set ([runbook](../docs/operations.md#loading-specific-years)) and compare the `file.path` values in OpenSearch with the years you asked for.
 
 ## Running the integration tests with Docker
 

@@ -173,13 +173,16 @@ Prerequisites on the instance, outside this module's control:
    # Optional: node IDs to enable (example: "en"); empty enables all.
    ENABLED_NODES=""
 
+   # Optional: years to load (example: "2021-2022"); empty loads all years.
+   LOG_YEARS=""
+
    # Optional: egress report recipients; empty skips the cron job.
    EGRESS_REPORT_RECIPIENTS=""
 
-   export S3_CF_BUCKET_NAME REPO_BRANCH ENABLED_NODES EGRESS_REPORT_RECIPIENTS
+   export S3_CF_BUCKET_NAME REPO_BRANCH ENABLED_NODES LOG_YEARS EGRESS_REPORT_RECIPIENTS
    ```
 
-   `ENABLED_NODES` and the egress report are described in the [Operations Runbook](../../docs/operations.md#deploying-with-a-subset-of-nodes).
+   `ENABLED_NODES`, `LOG_YEARS` and the egress report are described in the Operations Runbook ([nodes](../../docs/operations.md#deploying-with-a-subset-of-nodes), [years](../../docs/operations.md#loading-specific-years)).
 3. Deploy the config and start the service. Re-running this is also how you apply a config change.
 
    ```bash

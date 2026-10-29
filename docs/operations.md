@@ -53,6 +53,29 @@ unset ENABLED_NODES
 bash <(curl -fsSL "${DEPLOY_URL}")
 ```
 
+### Loading specific years
+
+`LOG_YEARS` (comma- or space-separated years or `YYYY-YYYY` ranges, e.g. `2023` or `2021-2024`) limits every S3 input to objects dated in those years; unset loads every year. It combines with `ENABLED_NODES`.
+
+```bash
+LOG_YEARS="2021-2022"
+export LOG_YEARS
+bash <(curl -fsSL "${DEPLOY_URL}")
+
+# Later, add a year; 2021 and 2022 keep their read position:
+LOG_YEARS="2021-2023"
+bash <(curl -fsSL "${DEPLOY_URL}")
+```
+
+How it works:
+
+- The build emits each `s3` input once per year, with an `exclude_pattern` that skips every key without a date in that year, and a per-year `sincedb_path` and `id` (`..._<year>`). Dates are recognised as `YYYY-MM[-DD]`, `YYYYMMDD`, `YYMMDD` in `u_ex*`, `*log.*` and `*xferlog.*` names, and `year=YYYY/` or `/YYYY/` path segments.
+- A year is selected by the date in the object key, not by the event timestamps inside the file.
+- Objects with no date in the key (for example rotated `access_log.3.gz`) are skipped whenever `LOG_YEARS` is set.
+- Each year has its own sincedb, so adding a year reads only that year. Unsetting `LOG_YEARS` switches to the plain inputs, which keep their own sincedb files and do not know what the year inputs loaded: with no sincedb they re-read every year (documents are overwritten, not duplicated), and with an old one they resume from its timestamp. To finish a catch-up, list every year through the current one (for example `LOG_YEARS="2021-2026"`) instead of unsetting it, and add the new year each January.
+- Every input lists its prefix on each poll, so the number of inputs is the number of prefixes times the number of years. Keep the list to the years you need.
+- A year that is still receiving logs (CloudFront, the `weblogs/` prefixes) stops being ingested if it is not in the list.
+
 ### Re-ingest from S3
 
 Each S3 input records its read position in a sincedb file. Deleting it re-reads the prefix; `document_id` is a fingerprint, so documents are overwritten, not duplicated.

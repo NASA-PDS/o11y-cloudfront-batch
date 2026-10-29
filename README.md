@@ -135,16 +135,16 @@ Each node has one pipeline, built from `inputs/pds-input-s3-<node>.conf`.
 
 | Node | S3 prefix (node logs bucket) | Domains | `event.dataset` |
 |---|---|---|---|
-| ATM | `atm/` | pds-atmospheres.nmsu.edu | `atm.http`, `atm.ftp` |
-| EN | `en/`; CloudFront bucket: `pdc-cds-infra/cloudfront/access/{json,w3c}/pds-main/`, `.../w3c/portal-legacy/` | pds.nasa.gov, pds.mcp.nasa.gov | `en.http`, `en.cloudfront.main`, `en.cloudfront.legacy` |
-| GEO | `geo/` | pds-geosciences.wustl.edu, an.rsl.wustl.edu, ode.rsl.wustl.edu, pds-speclib.rsl.wustl.edu | `geo.http`, `geo.ftp` |
+| ATM | `atm/atm-apache-http/`, `atm/atm-atmos-ftp/`, `atm/all/` | pds-atmospheres.nmsu.edu | `atm.http`, `atm.ftp` |
+| EN | `eng/en/`; CloudFront bucket: `pdc-cds-infra/cloudfront/access/{json,w3c}/pds-main/`, `.../w3c/portal-legacy/` | pds.nasa.gov, pds.mcp.nasa.gov | `en.http`, `en.cloudfront.main`, `en.cloudfront.legacy` |
+| GEO | `geo/geo-*` and `geo/weblogs/{geo-iis,geo-apache}/<host>/` | pds-geosciences.wustl.edu, an.rsl.wustl.edu, ode.rsl.wustl.edu, pds-speclib.rsl.wustl.edu | `geo.http`, `geo.ftp` |
 | IMG | `img/` | pds-imaging.jpl.nasa.gov | `img.http` |
-| NAIF | `naif/` | naif.jpl.nasa.gov, pds-naif.jpl.nasa.gov | `naif.http`, `naif.ftp` |
+| NAIF | `naif/naif-httpdlogs`, `naif/naif-xferlogs`, `naif/weblogs/naif-apache/` | naif.jpl.nasa.gov, pds-naif.jpl.nasa.gov | `naif.http`, `naif.ftp` |
 | PPI | `ppi/` | pds-ppi.igpp.ucla.edu | `ppi.http` |
 | RINGS | `rings/` | pds-rings.seti.org, opus.pds-rings.seti.org | `rings.http` |
 | SBN | `sbn/` | sbn.psi.edu, sbnapps.psi.edu, pds-smallbodies.astro.umd.edu | `sbn.http` |
 
-EN polls every 15 minutes; the other nodes every 2 hours.
+EN polls every 15 minutes; the other nodes every 2 hours. Set `LOG_YEARS` to load only some years of the backlog ([runbook](docs/operations.md#loading-specific-years)).
 
 ## S3 log sync (deprecated)
 

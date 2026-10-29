@@ -31,6 +31,12 @@
 #                              deploy to let EN's backlog catch up alone,
 #                              then redeploy with it unset to bring the rest
 #                              online.
+#   LOG_YEARS                — comma/space-separated years or YYYY-YYYY ranges
+#                              (e.g. "2023" or "2021-2024"). Each S3 input reads
+#                              only objects dated in those years. Default: all
+#                              years. To load more years later, redeploy with
+#                              the longer list; years already loaded keep their
+#                              read position.
 #
 # Daily egress report cron job — installed only when EGRESS_REPORT_RECIPIENTS
 # is set (REQUIRED at deploy time to enable the report; everything else has
@@ -79,6 +85,7 @@ if [ -z "${S3_CF_BUCKET_NAME:-}" ] && [ -f "$LOGSTASH_CONFIG_DIR/env" ]; then
 fi
 S3_CF_BUCKET_NAME="${S3_CF_BUCKET_NAME:-}"
 ENABLED_NODES="${ENABLED_NODES:-}"
+LOG_YEARS="${LOG_YEARS:-}"
 
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 
@@ -113,6 +120,7 @@ else
   echo "CF Bucket: $S3_CF_BUCKET_NAME"
 fi
 echo "Enabled nodes: ${ENABLED_NODES:-all}"
+echo "Log years: ${LOG_YEARS:-all}"
 echo ""
 
 # ----------------------------------------
@@ -146,7 +154,7 @@ sed -i -E "s/^-Xms.*/-Xms${HEAP_MB}m/; s/^-Xmx.*/-Xmx${HEAP_MB}m/" "$LOGSTASH_CO
 echo "JVM heap: ${HEAP_MB} MB (system RAM ${MEM_TOTAL_MB} MB)"
 
 echo "--- Building Logstash pipeline configs ---"
-LS_SETTINGS_DIR="$LOGSTASH_CONFIG_DIR" ENABLED_NODES="$ENABLED_NODES" \
+LS_SETTINGS_DIR="$LOGSTASH_CONFIG_DIR" ENABLED_NODES="$ENABLED_NODES" LOG_YEARS="$LOG_YEARS" \
   bash "$REPO_DIR/scripts/logstash_build_config.sh"
 echo "pipelines.yml and pipeline configs generated"
 
