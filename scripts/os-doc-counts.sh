@@ -26,7 +26,7 @@ fi
 PYTHON_BIN="$(command -v python3.13 2>/dev/null || echo python3)"
 
 "$PYTHON_BIN" - "$INDEX_PATTERN" "$REGION" <<'EOF'
-import boto3, json, sys, urllib.request, urllib.error
+import boto3, json, sys, urllib.parse, urllib.request, urllib.error
 from botocore.auth import SigV4Auth
 from botocore.awsrequest import AWSRequest
 
@@ -37,6 +37,10 @@ endpoint = ssm.get_parameter(Name='/pds/o11y-platform/opensearch/opensearch_endp
 creds = session.get_credentials().get_frozen_credentials()
 
 TIMEOUT = 30
+
+# botocore signs the query string exactly as given, so it must already be
+# percent-encoded (commas as %2C) to match what OpenSearch canonicalizes.
+CAT_QUERY = urllib.parse.urlencode({'h': 'index,docs.count,store.size', 's': 'index', 'format': 'json'})
 
 def signed_request(method, path, body=None, content_type=None):
     url = f'https://{endpoint}{path}'
@@ -61,13 +65,13 @@ if err:
 print(f'Cluster: {endpoint}  status={data["status"]}  nodes={data["number_of_nodes"]}')
 
 # List all indices matching the pattern
-cat, err = signed_request('GET', f'/_cat/indices/{index_pattern}?h=index,docs.count,store.size&s=index&format=json')
+cat, err = signed_request('GET', f'/_cat/indices/{index_pattern}?{CAT_QUERY}')
 if err:
     # Distinguish a genuine "no match" (404) from auth/server failures
     if 'HTTP 404' in err:
         print(f'\nNo indices found matching "{index_pattern}".')
         print('Listing all non-system indices for reference:')
-        cat, err2 = signed_request('GET', '/_cat/indices?h=index,docs.count,store.size&s=index&format=json')
+        cat, err2 = signed_request('GET', f'/_cat/indices?{CAT_QUERY}')
         if err2:
             print(f'  ERROR listing indices: {err2}')
             sys.exit(1)

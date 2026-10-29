@@ -1,4 +1,5 @@
-## JVM configuration for Logstash on t3.2xlarge (32 GB RAM).
+## JVM configuration for Logstash. The heap values below are the maximum,
+## sized for a t3.2xlarge (32 GB RAM).
 ##
 ## WHERE THIS FILE GOES:
 ##   scripts/logstash-deploy.sh copies config/logstash/config/* to /etc/logstash/
@@ -21,6 +22,9 @@
 ##   Do not exceed half of total system RAM. Logstash's off-heap usage
 ##   (network buffers, JVM metaspace, native code) can match or exceed the
 ##   heap at high throughput, so the other half must remain free for the OS.
+##   scripts/logstash-deploy.sh rewrites -Xms/-Xmx in /etc/logstash/jvm.options
+##   to half of system RAM, capped at the 8 GB set here, so smaller instances
+##   (for example a t3.large with 8 GB) start.
 
 -Xms8g
 -Xmx8g

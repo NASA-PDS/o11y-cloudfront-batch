@@ -36,6 +36,6 @@ variable "partition" {
 }
 
 variable "s3_bucket_prefix" {
-  description = "Prefix for the S3 bucket name only (e.g. pds-dev-gh01dc). The gh01dc is a legacy artifact of an early GitHub CD/OIDC deploy design (since dropped) that lives on because the buckets were never renamed — see terraform/s3/README.md."
+  description = "Prefix for the S3 bucket name only. The bucket is named <prefix>-web-analytics. May include a CI/CD identifier."
   type        = string
 }

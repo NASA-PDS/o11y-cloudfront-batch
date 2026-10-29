@@ -1,172 +1,98 @@
-# PDS Web Analytics Testing
+# Tests
 
-This directory contains tests for the PDS Web Analytics project, including both unit tests and integration tests, all using the unittest framework.
+| File | Covers |
+|---|---|
+| `test_logstash_integration.py` | Runs `shared/pds-filter.conf` against sample input and checks event counts per output directory |
+| `test_logstash_log_years.py` | Runs the real input configs, built with `LOG_YEARS`, in Logstash against a fake S3 server (moto) and checks which objects are ingested |
+| `test_logstash_build_config.py` | `scripts/logstash_build_config.sh`, including `ENABLED_NODES`, `LOG_YEARS` and the year `exclude_pattern` |
+| `test_sample_logs.py` | `copy-sample-logs` |
+| `test_s3_sync.py` | The deprecated `s3-log-sync` tool |
+| `test_egress_report.py` | `egress_report.py` |
+| `conftest.py` | Shared helpers |
 
-## Test Structure
+Run the Python unit tests with `pytest`, or all supported Python versions and lint with `tox`. The integration tests need Logstash, so run them in Docker.
 
-### Unit Tests (unittest)
-- **`test_s3_sync.py`**: Tests for S3 synchronization functionality
-- **`conftest.py`**: Helper functions and utilities for testing
+## Testing against real S3 objects in a non-prod venue
 
-### Integration Tests (unittest)
-- **`test_logstash_integration.py`**: End-to-end tests for Logstash pipeline processing
-  - Replaces the functionality of the old `run_tests.sh` script
-  - Tests Logstash configurations with various input formats
-  - Validates output file counts and contents
-  - Provides better error handling and cross-platform compatibility
-  - Uses unittest framework for better standard library integration
+`copy-sample-logs` copies a small sample of objects, with their keys, from the real buckets into the venue's buckets, so you can deploy with `LOG_YEARS` and check what is ingested. It reads the prefixes from `config/logstash/config/inputs/`, drops keys each input's `exclude_pattern` skips, and picks `--per-prefix` objects evenly across each listing so every year present is represented. It prints the plan unless `--execute` is given, and refuses a destination bucket equal to the source.
 
-### Test Configuration Files
-- **`config/test-input-https.conf`**: Test configuration for HTTPS logs
-- **`config/test-input-ftp.conf`**: Test configuration for FTP logs
-- **`config/test-input-logs.conf`**: Test configuration for all log files in test/data/logs
-- **`config/test-output.conf`**: Test output configuration
-
-## Running Tests
-
-### Running Tests Directly
-
-#### Unit Tests
 ```bash
-# Run all unit tests
-python -m unittest tests.test_s3_sync
+SRC_PROFILE="<profile-that-can-read-the-source-buckets>"
+DST_PROFILE="<profile-that-can-write-the-venue-buckets>"
+SRC_BUCKET="<source-node-logs-bucket>"
+DST_BUCKET="<venue-node-logs-bucket>"
+SRC_CF_BUCKET="<source-cloudfront-logs-bucket>"
+DST_CF_BUCKET="<venue-cloudfront-logs-bucket>"
 
-# Run specific test class
-python -m unittest tests.test_s3_sync.TestS3Sync
+# Print the plan for two nodes:
+copy-sample-logs --src-profile "${SRC_PROFILE}" --dst-profile "${DST_PROFILE}" \
+    --src-bucket "${SRC_BUCKET}" --dst-bucket "${DST_BUCKET}" \
+    --src-cf-bucket "${SRC_CF_BUCKET}" --dst-cf-bucket "${DST_CF_BUCKET}" \
+    --nodes geo naif
 
-# Run specific test method
-python -m unittest tests.test_s3_sync.TestS3Sync.test_init_with_gzip_enabled
-
-# Run with verbose output
-python -m unittest tests.test_s3_sync -v
+# Copy it:
+copy-sample-logs --src-profile "${SRC_PROFILE}" --dst-profile "${DST_PROFILE}" \
+    --src-bucket "${SRC_BUCKET}" --dst-bucket "${DST_BUCKET}" \
+    --src-cf-bucket "${SRC_CF_BUCKET}" --dst-cf-bucket "${DST_CF_BUCKET}" \
+    --nodes geo naif --execute
 ```
 
-#### Integration Tests
+Omit the two CloudFront options to skip EN's CloudFront inputs. Then deploy to the venue with `LOG_YEARS` set ([runbook](../docs/operations.md#loading-specific-years)) and compare the `file.path` values in OpenSearch with the years you asked for.
+
+## Running the integration tests with Docker
+
 ```bash
-# Run all integration tests
-python -m unittest tests.test_logstash_integration
-
-# Run specific test method
-python -m unittest tests.test_logstash_integration.TestLogstashIntegration.test_https_log_processing
-
-# Run with verbose output
-python -m unittest tests.test_logstash_integration -v
+docker compose run --rm test
 ```
 
-#### All Tests
+Output files are written to `./output/` for inspection. To run one test:
+
 ```bash
-# Run all tests in the tests directory
-python -m unittest discover tests
-
-# Run with verbose output
-python -m unittest discover tests -v
+docker compose run --rm test python3 -m unittest \
+    tests.test_logstash_integration.TestLogstashIntegration.test_cloudfront_log_processing -v
 ```
 
-## Test Framework Choice
+Without Docker, run `python -m unittest tests.test_logstash_integration -v` with `logstash` on the `PATH`. Each pipeline run has a 5-minute timeout.
 
-### Why unittest?
-- **Standard Library**: No additional dependencies required
-- **Process Management**: Better handling of subprocess execution
-- **Error Handling**: More explicit error handling for external tools
-- **Cross-Platform**: Better compatibility across different operating systems
-- **Consistency**: All tests use the same framework
-- **Simplicity**: Easier to understand and maintain
+`docker compose run --rm test` runs both integration modules. To run only the `LOG_YEARS` tests, which start Logstash three or four times and take several minutes:
 
-## Test Data
-
-The `data/logs/` directory contains sample log files for testing:
-- Apache HTTP access logs
-- FTP transfer logs
-- Various PDS node log formats
-
-## Prerequisites
-
-### For All Tests
-- Python 3.12 or 3.13
-- No additional Python dependencies required
-
-### For Integration Tests
-- Logstash (must be in PATH)
-
-## Configuration
-
-Integration tests use configuration files in the `config/` directory:
-- Input configurations specify log sources
-- Output configurations specify where processed data should be written
-- Filter configurations define data processing rules
-
-## Helper Functions
-
-The `conftest.py` module provides helper functions for testing:
-
-```python
-from tests.conftest import (
-    create_test_data_dir,
-    cleanup_test_data_dir,
-    create_sample_log_files,
-    get_sample_config,
-    create_temp_config_file,
-    cleanup_temp_config_file,
-    MockAWSCredentials,
-    MockSubprocess,
-    TestDataManager
-)
-
-# Example usage in a test class
-class TestExample(unittest.TestCase):
-    def setUp(self):
-        self.test_data_dir = create_test_data_dir()
-        self.config_file = create_temp_config_file()
-
-    def tearDown(self):
-        cleanup_test_data_dir(self.test_data_dir)
-        cleanup_temp_config_file(self.config_file)
-
-    def test_with_mocked_aws(self):
-        with MockAWSCredentials():
-            # Test code here
-            pass
-
-    def test_with_mocked_subprocess(self):
-        with MockSubprocess(stdout="success", returncode=0) as mock_run:
-            # Test code here
-            pass
-```
-
-## Troubleshooting
-
-### Common Issues
-
-1. **Logstash not found**: Ensure Logstash is installed and in your PATH
-2. **Permission errors**: Check file permissions for test data and output directories
-3. **Timeout errors**: Integration tests have a 5-minute timeout; increase if needed
-4. **Missing dependencies**: Install required packages with `pip install -e .`
-
-### Debug Mode
-
-Run tests with verbose output to see detailed execution:
 ```bash
-./run_unit_tests.sh -v
+docker compose run --rm test python -m unittest tests.test_logstash_log_years -v
 ```
 
-### Manual Testing
+After changing the repo or the dev dependencies, rebuild first with `docker compose build test`.
 
-To manually test Logstash configurations:
-```bash
-# Test HTTPS logs
-logstash -f tests/config/test-input-https.conf tests/config/shared/pds-filter.conf tests/config/test-output.conf
+### Reading the output
 
-# Test FTP logs
-logstash -f tests/config/test-input-ftp.conf tests/config/shared/pds-filter.conf tests/config/test-output.conf
-```
+Each test writes one JSON file per event into an `output/` subdirectory. `tests/config/test-output.conf` routes by tag; the first match wins, top to bottom:
 
-## Contributing
+| Directory | Tag |
+|---|---|
+| `corrupt-logs/` | `_datetimeparsefailure` |
+| `parse-failures/` | `_grokparsefailure` or `_grok_filter_initial_parse_failure` |
+| `bad-logs/` | `_missing_url_original` |
+| `invalid-methods/` | `_invalid_http_method` |
+| `template-errors/` | `_template_variable` |
+| `empty-user-agents/` | `_empty_user_agent` |
+| `duplicate-sources/` | `_duplicate_source_address` |
+| `processed-logs/` | none of the above |
 
-When adding new tests:
-1. Use unittest framework for all tests
-2. Inherit from `unittest.TestCase`
-3. Use `setUp()` and `tearDown()` methods for test setup/cleanup
-4. Use unittest assertion methods (`self.assertEqual()`, `self.assertTrue()`, etc.)
-5. Add appropriate test data to `data/logs/` if needed
-6. Update this README with any new test procedures
-7. Use helper functions from `conftest.py` for common testing tasks
+Each test asserts the exact file count per directory. A mismatch means the filter's behavior changed or the expected counts need updating. The test routing differs from production, which diverts a different tag set to the bad-logs file (see the [Operations Runbook](../docs/operations.md#bad-logs)).
+
+## Adding tests for a new log format
+
+1. **Input config.** Create `tests/config/test-input-<format>.conf`: a `generator` input with `count => 1` and representative `lines` (a success, a 4xx/5xx, and any edge cases). Set only the fields the filter reads from the real input, at minimum `[organization][name]`. Do not set fields the grok pattern derives, such as `[url][domain]`.
+2. **Test class.** In `tests/test_logstash_integration.py`:
+   - add the format to `ENABLED_CONFIGS`, `INPUT_CONFIGS`, and the `descriptions` dict in `get_enabled_configs()`
+   - add an entry to `EXPECTED_COUNTS` with a count for each directory in the table above, setting `processed_logs` last
+   - add a test method:
+
+   ```python
+   def test_<format>_log_processing(self):
+       if "<format>" not in self.ENABLED_CONFIGS:
+           self.skipTest("<format> configuration not enabled")
+       success, output_dir = self.run_logstash_pipeline("<format>", "<Format> Log Processing")
+       self.assertTrue(success, "Logstash pipeline failed for <Format> logs")
+       self.validate_output_counts(output_dir, "<format>")
+   ```
+3. **Tune.** Run the single test (command above), inspect `output/`, then fix `shared/pds-filter.conf` or set the counts that match intended behavior.

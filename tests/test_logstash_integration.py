@@ -41,7 +41,7 @@ class TestLogstashIntegration(unittest.TestCase):
             "template_errors": 0,
             "empty_user_agents": 1,
             "duplicate_sources": 0,
-            "processed_logs": 25,  # +2 for url-field-parsing test lines (10.99.1.1, 10.99.1.2)
+            "processed_logs": 26,  # +2 url-field-parsing lines (10.99.1.1, 10.99.1.2), +1 cache-buster (91.107.144.23)
             "corrupt_logs": 3,
         },
         "ftp": {
@@ -497,6 +497,13 @@ class TestLogstashIntegration(unittest.TestCase):
         query_parts = url.get("query_parts", [])
         self.assertIn("target=lucy", query_parts, "url.query_parts must contain 'target=lucy'")
         self.assertIn("version=2", query_parts, "url.query_parts must contain 'version=2'")
+
+        # ── Test 1b: "_" cache-buster key must survive sanitizing as a non-empty key ──
+        cache_events = by_source.get("91.107.144.23", [])
+        self.assertEqual(len(cache_events), 1, "Expected 1 processed event for 91.107.144.23")
+        cache_params = cache_events[0].get("url", {}).get("query_params", {})
+        self.assertNotIn("", cache_params, "url.query_params must not contain an empty field name")
+        self.assertEqual(cache_params.get("_"), "1706077556736", "url.query_params._ must hold the cache-buster")
 
         # ── Test 2: path only, no query string ───────────────────────────────
         no_query_events = by_source.get("10.99.1.2", [])

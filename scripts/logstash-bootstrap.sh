@@ -3,13 +3,20 @@
 # Logstash RPM + plugins, and configure the `pdsops` key-user account for
 # no-sudo day-2 operations.
 #
+# NOTE: On Terraform-managed EC2s this script is NOT needed at first boot —
+# the same steps are baked into the EC2 userdata (logstash-userdata.sh.tpl)
+# and run automatically. Use this script only for:
+#   - Upgrading Logstash to a new version on a running instance
+#   - Re-provisioning the pdsops account after an AMI rebuild
+#   - Setting up an existing EC2 that predates the Terraform module
+#     (manage_ec2_instance = false)
+#
 # The `pdsops` user is pre-provisioned in the SA-managed AMI. This script
 # does not create the account — it only installs Logstash and sets up the
 # directories and systemd unit the account needs.
 #
-# Run manually once after first boot via SSM, and again only for deliberate
-# SA actions such as a Logstash version upgrade. Does NOT require the
-# o11y-cloudfront-batch repo to be checked out — download and run directly:
+# Does NOT require the o11y-cloudfront-batch repo to be checked out —
+# download and run directly:
 #
 #   curl -fsSL https://raw.githubusercontent.com/NASA-PDS/o11y-cloudfront-batch/main/scripts/logstash-bootstrap.sh \
 #     | sudo bash
@@ -21,7 +28,7 @@
 # to clone the repo, deploy config, and start the service.
 #
 # Env overrides:
-#   LOGSTASH_VERSION — Logstash version to install if missing (default: 8.18.0)
+#   LOGSTASH_VERSION — Logstash version to install if missing (default: 8.19.23)
 #   REPO_DIR         — path to hand off repo ownership if already on disk (default: /opt/o11y-cloudfront-batch)
 
 set -euo pipefail
@@ -31,7 +38,7 @@ if [ "$(id -u)" -ne 0 ]; then
   exit 1
 fi
 
-LOGSTASH_VERSION="${LOGSTASH_VERSION:-8.18.0}"
+LOGSTASH_VERSION="${LOGSTASH_VERSION:-8.19.23}"
 REPO_DIR="${REPO_DIR:-/opt/o11y-cloudfront-batch}"
 PDSOPS_USER="pdsops"
 PDSOPS_HOME="$(getent passwd "$PDSOPS_USER" | cut -d: -f6)"
@@ -53,21 +60,34 @@ if [ ! -f /usr/share/logstash/bin/logstash ]; then
     PYTHON_BIN="python3"
     PYTHON_PKGS="python3 python3-pip"
   fi
-  dnf install -y git $PYTHON_PKGS gettext awscli2 --quiet
-  "$PYTHON_BIN" -m pip install --quiet --break-system-packages boto3 requests
+  dnf install -y git $PYTHON_PKGS gettext --quiet
+  # The AMI ships an AWS CLI; install one only if it is missing.
+  if ! command -v aws >/dev/null 2>&1; then
+    dnf install -y awscli2 --quiet
+  fi
+  # pip older than 23.0.1 (python3.9 on RHEL 9) rejects --break-system-packages.
+  PIP_HELP="$("$PYTHON_BIN" -m pip install --help 2>/dev/null || true)"
+  PIP_FLAGS=""
+  if grep -q -- "--break-system-packages" <<<"$PIP_HELP"; then
+    PIP_FLAGS="--break-system-packages"
+  fi
+  "$PYTHON_BIN" -m pip install --quiet $PIP_FLAGS boto3 requests
 
   rpm --import https://artifacts.elastic.co/GPG-KEY-elasticsearch
+  # The repo is disabled by default so routine `dnf update` runs cannot upgrade
+  # Logstash: an RPM upgrade resets ownership of /var/log/logstash and the other
+  # directories handed to pdsops below. Installs name the repo explicitly.
   cat > /etc/yum.repos.d/elastic.repo <<'REPO'
 [elasticsearch]
 name=Elasticsearch repository for 8.x packages
 baseurl=https://artifacts.elastic.co/packages/8.x/yum
 gpgcheck=1
 gpgkey=https://artifacts.elastic.co/GPG-KEY-elasticsearch
-enabled=1
+enabled=0
 autorefresh=1
 type=rpm-md
 REPO
-  dnf install -y "logstash-${LOGSTASH_VERSION}"
+  dnf install -y --enablerepo=elasticsearch "logstash-${LOGSTASH_VERSION}"
   echo "Logstash installed"
 else
   echo "Logstash already installed — skipping"
@@ -134,11 +154,15 @@ $PDSOPS_USER hard nofile 65536
 EOF
 
 # Defensive XDG_RUNTIME_DIR export — belt-and-suspenders in case whatever
-# session mechanism (SSM Run-As, runuser) doesn't set it via PAM/logind.
+# session mechanism (sudo -iu, runuser) does not set it via PAM/logind.
 for f in "$PDSOPS_HOME/.bash_profile" "$PDSOPS_HOME/.bashrc"; do
   touch "$f"
   if ! grep -q 'XDG_RUNTIME_DIR' "$f"; then
     echo 'export XDG_RUNTIME_DIR="/run/user/$(id -u)"' >> "$f"
+  fi
+  # /usr/local/bin (where the AWS CLI lives) is not on the pdsops login PATH.
+  if ! grep -q '/usr/local/bin' "$f"; then
+    echo 'export PATH="/usr/local/bin:$PATH"' >> "$f"
   fi
 done
 chown "$PDSOPS_OWNER" "$PDSOPS_HOME/.bash_profile" "$PDSOPS_HOME/.bashrc"
