@@ -41,7 +41,7 @@ class TestLogstashIntegration(unittest.TestCase):
             "template_errors": 0,
             "empty_user_agents": 1,
             "duplicate_sources": 0,
-            "processed_logs": 26,  # +2 url-field-parsing lines (10.99.1.1, 10.99.1.2), +1 cache-buster (91.107.144.23)
+            "processed_logs": 28,  # +2 url-field-parsing lines (10.99.1.1, 10.99.1.2), +1 cache-buster (91.107.144.23), +2 GEO IIS lines with time-taken "-"
             "corrupt_logs": 3,
         },
         "ftp": {
@@ -52,7 +52,9 @@ class TestLogstashIntegration(unittest.TestCase):
             "empty_user_agents": 0,
             "duplicate_sources": 0,
             "processed_logs": 16,
-            "corrupt_logs": 6,
+            # 6 deliberately invalid lines + the truncated IIS FTP fragment ("elClosed"); the IIS data-channel
+            # lines (sc-status "-") parse and are dropped as non-RETR commands
+            "corrupt_logs": 7,
         },
         "cloudfront": {
             "parse_failures": 0,
