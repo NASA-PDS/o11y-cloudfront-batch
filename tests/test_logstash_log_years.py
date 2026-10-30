@@ -1,9 +1,12 @@
 """Integration tests for LOG_YEARS: the generated inputs run in Logstash against a fake S3 server.
 
 The real input configs are built by scripts/logstash_build_config.sh with LOG_YEARS set, pointed at a
-local moto S3 server, and run in Logstash with a file output that records the key of every object the
-s3 inputs ingest. The year patterns therefore run in the plugin's own regex engine, over the real
-prefixes of every node and the CloudFront bucket. The shared filter is not part of these tests.
+local moto S3 server, and run in Logstash with a file output that records the key and the content of
+every object the s3 inputs ingest. The year patterns therefore run in the plugin's own regex engine,
+over the real prefixes of every node and the CloudFront bucket. Each object's content is its own key,
+and many objects share a file name across inputs, so the tests also check that every input ingests
+its own object and not a same-named object from another input. The shared filter is not part of
+these tests.
 """
 import gzip
 import os
@@ -25,15 +28,28 @@ SOURCE_CONFIG_DIR = REPO_ROOT / "config" / "logstash" / "config"
 
 NODE_BUCKET = "test-bucket"
 CF_BUCKET = "test-cf-bucket"
-LOG_LINE = b'203.0.113.5 - - [01/Jan/2023:00:00:00 +0000] "GET / HTTP/1.1" 200 1 "-" "test"\n'
+GEO_IIS_HOSTS = [
+    "an.rsl.wustl.edu",
+    "anms.rsl.wustl.edu",
+    "bm1ms.rsl.wustl.edu",
+    "bm2ms.rsl.wustl.edu",
+    "cart-ode.rsl.wustl.edu",
+    "crismtypespectra.rsl.wustl.edu",
+    "mars1ms.rsl.wustl.edu",
+    "mercuryms.rsl.wustl.edu",
+    "moon1ms.rsl.wustl.edu",
+    "moon2ms.rsl.wustl.edu",
+    "ode.rsl.wustl.edu",
+    "oderest.rsl.wustl.edu",
+    "pds-geosciences.wustl.edu",
+    "pds-speclib.rsl.wustl.edu",
+    "ptms.rsl.wustl.edu",
+    "venusms.rsl.wustl.edu",
+]
 
 # One object per input prefix and per date shape, with the year as {year} (YYYY) and {yy} (YY).
-# Every base name is unique: the s3 input downloads each object under its base name in a directory
-# shared by all inputs.
-NODE_KEY_TEMPLATES = [
-    "geo/geo-an/u_ex{yy}0101.log.gz",
+_OTHER_NODE_KEY_TEMPLATES = [
     "geo/geo-ode-mapserver/u_ex{yy}0601mars2a.log.gz",
-    "geo/weblogs/geo-iis/ode.rsl.wustl.edu/{year}/10/u_ex{yy}1001.log.gz",
     "geo/weblogs/geo-apache/geoweb.rsl.wustl.edu/{year}/10/access.log-{year}-10-22.gz",
     "atm/atm-apache-http/atm-atmos-apache.{year}-05-01.txt.gz",
     "atm/all/atm-atmos-ftp.{year}-07-01.gz",
@@ -50,6 +66,12 @@ NODE_KEY_TEMPLATES = [
     "sbn/sbn-psi-tomcat/sbn_archive_{year}0101.txt.gz",
     "sbn/sbn-psi-tools/sbnapps_{year}0101.txt.gz",
 ]
+# The GEO legacy prefixes share one file name and so do the GEO IIS hosts, as in the real buckets.
+NODE_KEY_TEMPLATES = (
+    [f"geo/geo-{name}/u_ex{{yy}}0101.log.gz" for name in ("an", "ode", "pds", "speclib", "va")]
+    + [f"geo/weblogs/geo-iis/{host}/{{year}}/10/u_ex{{yy}}1001.log.gz" for host in GEO_IIS_HOSTS]
+    + _OTHER_NODE_KEY_TEMPLATES
+)
 CF_KEY_TEMPLATES = [
     "pdc-cds-infra/cloudfront/access/json/pds-main/year={year}/month=07/day=17/EDISTRIBUTIONID.{year}-07-17-21.d7397384.gz",
     "pdc-cds-infra/cloudfront/access/w3c/pds-main/year={year}/month=08/day=14/EDISTRIBUTIONID.{year}-08-14-23.e4a0766e.gz",
@@ -68,7 +90,7 @@ OUTPUT_CONFIG = """
 output {{
   file {{
     path => "{keys_file}"
-    codec => line {{ format => "%{{[@metadata][s3][key]}}" }}
+    codec => line {{ format => "%{{[@metadata][s3][key]}}|%{{message}}" }}
     flush_interval => 1
   }}
 }}
@@ -133,9 +155,8 @@ class TestLogYearsIntegration(unittest.TestCase):
         )
         for bucket in (NODE_BUCKET, CF_BUCKET):
             s3.create_bucket(Bucket=bucket, CreateBucketConfiguration={"LocationConstraint": "us-west-2"})
-        body = gzip.compress(LOG_LINE)
         for bucket, key in cls.all_objects():
-            s3.put_object(Bucket=bucket, Key=key, Body=body)
+            s3.put_object(Bucket=bucket, Key=key, Body=gzip.compress(f"{key}\n".encode()))
         time.sleep(3)  # the s3 input defers objects modified in the last two seconds
 
     @classmethod
@@ -211,7 +232,10 @@ class TestLogYearsIntegration(unittest.TestCase):
                 except subprocess.TimeoutExpired:
                     proc.kill()
                     proc.wait()
-        return sorted(keys_file.read_text().split()) if keys_file.exists() else []
+        pairs = [line.split("|", 1) for line in keys_file.read_text().split()] if keys_file.exists() else []
+        swapped = [f"{key} was ingested with the content of {content}" for key, content in pairs if key != content]
+        self.assertEqual(swapped, [], "inputs ingested another input's object")
+        return sorted(key for key, _ in pairs)
 
     def wait_for_keys(self, proc: "subprocess.Popen[bytes]", keys_file: Path, log_path: Path, expected: int) -> None:
         """Wait until ``expected`` keys are written, Logstash exits or the timeout passes."""

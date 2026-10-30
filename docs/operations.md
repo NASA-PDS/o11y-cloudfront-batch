@@ -69,7 +69,7 @@ bash <(curl -fsSL "${DEPLOY_URL}")
 
 How it works:
 
-- The build emits each `s3` input once per year, with an `exclude_pattern` that skips every key without a date in that year, and a per-year `sincedb_path` and `id` (`..._<year>`). Dates are recognised as `YYYY-MM[-DD]`, `YYYYMMDD`, `YYMMDD` in `u_ex*`, `*log.*` and `*xferlog.*` names, and `year=YYYY/` or `/YYYY/` path segments.
+- The build emits each `s3` input once per year, with an `exclude_pattern` that skips every key without a date in that year, and a per-year `sincedb_path`, `temporary_directory` and `id` (`..._<year>`). Dates are recognised as `YYYY-MM[-DD]`, `YYYYMMDD`, `YYMMDD` in `u_ex*`, `*log.*` and `*xferlog.*` names, and `year=YYYY/` or `/YYYY/` path segments.
 - A year is selected by the date in the object key, not by the event timestamps inside the file.
 - Objects with no date in the key (for example rotated `access_log.3.gz`) are skipped whenever `LOG_YEARS` is set.
 - Each year has its own sincedb, so adding a year reads only that year. Unsetting `LOG_YEARS` switches to the plain inputs, which keep their own sincedb files and do not know what the year inputs loaded: with no sincedb they re-read every year (documents are overwritten, not duplicated), and with an old one they resume from its timestamp. To finish a catch-up, list every year through the current one (for example `LOG_YEARS="2021-2026"`) instead of unsetting it, and add the new year each January.
@@ -170,7 +170,7 @@ The deploy script writes runtime config to `/etc/logstash/`, not the repo checko
 | `/etc/logstash/pipelines.yml` | Active pipelines, generated from the template |
 | `/etc/logstash/pipelines/pipeline-pds-input-s3-<node>.conf` | Per-node input + filter + output, generated |
 | `/etc/logstash/shared/`, `inputs/`, `logstash.yml`, `jvm.options` | Copied from the repo |
-| `/var/lib/logstash/plugins/inputs/s3/` | S3 sincedb files |
+| `/var/lib/logstash/plugins/inputs/s3/` | S3 sincedb files, and `tmp/<input id>/`, the directory each S3 input downloads objects into (one per input, because inputs read same-named files, such as `u_ex251001.log.gz` under every GEO host) |
 
 `INDEX_PREFIX` defaults to `pds-weblogs`; events go to `${INDEX_PREFIX}-YYYY-MM`. To see what a pipeline writes to: `grep "index =>" /etc/logstash/pipelines/pipeline-pds-input-s3-en.conf`.
 

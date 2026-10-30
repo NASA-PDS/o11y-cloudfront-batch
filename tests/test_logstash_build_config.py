@@ -71,7 +71,7 @@ def parse_s3_blocks(conf_text):
     blocks = []
     for body in S3_BLOCK.findall(conf_text):
         settings = {}
-        for key in ("prefix", "exclude_pattern", "sincedb_path", "id"):
+        for key in ("prefix", "exclude_pattern", "sincedb_path", "temporary_directory", "id"):
             found = re.findall(rf'^    {key} => "(.*)"$', body, re.MULTILINE)
             settings[key] = found
         blocks.append(settings)
@@ -177,17 +177,24 @@ class TestLogstashBuildConfig(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         return self.pipeline_input_blocks("naif")[1]["exclude_pattern"][0]
 
-    def test_source_inputs_have_unique_ids_and_sincedb_paths(self):
-        """Every s3 input in the source configs has its own id and sincedb file."""
-        ids, sincedbs = [], []
+    def test_source_inputs_have_unique_ids_sincedb_paths_and_download_directories(self):
+        """Every s3 input in the source configs has its own id, sincedb file and download directory."""
+        ids, sincedbs, temp_dirs = [], [], []
         for path in glob.glob(os.path.join(SOURCE_INPUT_DIR, "pds-input-s3-*.conf")):
             with open(path) as f:
                 for block in parse_s3_blocks(f.read()):
                     self.assertEqual(len(block["prefix"]), 1, path)
+                    self.assertEqual(len(block["temporary_directory"]), 1, f"{path} {block['id']}")
+                    self.assertEqual(
+                        block["temporary_directory"][0],
+                        f"/var/lib/logstash/plugins/inputs/s3/tmp/{block['id'][0]}",
+                    )
                     ids += block["id"]
                     sincedbs += block["sincedb_path"]
+                    temp_dirs += block["temporary_directory"]
         self.assertEqual(len(ids), len(set(ids)))
         self.assertEqual(len(sincedbs), len(set(sincedbs)))
+        self.assertEqual(len(temp_dirs), len(set(temp_dirs)))
         self.assertGreater(len(ids), 40)
 
     def test_no_log_years_leaves_inputs_unchanged(self):
@@ -216,11 +223,16 @@ class TestLogstashBuildConfig(unittest.TestCase):
                 self.assertEqual(len(block["exclude_pattern"]), 1, node)
             ids = [b["id"][0] for b in blocks]
             sincedbs = [b["sincedb_path"][0] for b in blocks]
+            temp_dirs = [b["temporary_directory"][0] for b in blocks]
             self.assertEqual(len(ids), len(set(ids)), node)
             self.assertEqual(len(sincedbs), len(set(sincedbs)), node)
+            self.assertEqual(len(temp_dirs), len(set(temp_dirs)), node)
+            for block in blocks:
+                self.assertTrue(block["temporary_directory"][0].endswith(f"/{block['id'][0]}"), node)
             for year in ("2022", "2023"):
                 self.assertEqual(sum(i.endswith(f"_{year}") for i in ids), len(source_blocks), node)
                 self.assertEqual(sum(s.endswith(f"_{year}") for s in sincedbs), len(source_blocks), node)
+                self.assertEqual(sum(t.endswith(f"_{year}") for t in temp_dirs), len(source_blocks), node)
 
     def test_log_years_ranges_are_expanded_and_deduplicated(self):
         """A YYYY-YYYY range expands to every year in it and repeated years collapse."""

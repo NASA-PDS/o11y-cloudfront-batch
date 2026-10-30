@@ -14,7 +14,7 @@
 # year ranges (e.g. "2023", "2021 2023", "2021-2024"). Each s3 input in the
 # enabled nodes is emitted once per year with an exclude_pattern that skips
 # every object whose key carries no date in that year, and with a per-year
-# sincedb_path and id (suffixed _<year>) so a year added later is read from
+# sincedb_path, temporary_directory and id (suffixed _<year>) so a year added later is read from
 # the start. Unset/empty leaves the inputs unchanged and loads every year.
 
 set -euo pipefail
@@ -108,7 +108,7 @@ else
 fi
 
 # Rewrites each top-level two-space-indented `s3 { ... }` block once per year in
-# `years`: appends _<year> to its sincedb_path and id, and sets an exclude_pattern
+# `years`: appends _<year> to its sincedb_path, temporary_directory and id, and sets an exclude_pattern
 # that matches (and so skips) every key without a date in that year. Recognised
 # date shapes: YYYY-MM[-DD], YYYYMMDD, a /YYYY/ or =YYYY/ path segment, and the
 # two-digit YYMMDD in u_ex*, *log.* and *xferlog.* names. An exclude_pattern already
@@ -134,7 +134,7 @@ function emit_block(    base, k, i, y, pat, line) {
     for (i = 1; i <= n; i++) {
       line = buf[i]
       if (line ~ /^[[:space:]]*exclude_pattern[[:space:]]*=>/) continue
-      if (line ~ /^[[:space:]]*(sincedb_path|id)[[:space:]]*=>/) sub(/"[[:space:]]*$/, "_" y "\"", line)
+      if (line ~ /^[[:space:]]*(sincedb_path|temporary_directory|id)[[:space:]]*=>/) sub(/"[[:space:]]*$/, "_" y "\"", line)
       print line
       if (line ~ /^[[:space:]]*prefix[[:space:]]*=>/) print "    exclude_pattern => \"" pat "\""
     }

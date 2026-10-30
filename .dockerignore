@@ -1,0 +1,26 @@
+# The test image needs src/, config/, scripts/, tests/, docs/ and the packaging files only.
+.git
+.github
+.idea
+.vscode
+.claude
+.env
+.env.*
+!.env.example
+.tox
+.venv
+venv
+venv_ci
+.mypy_cache
+.pytest_cache
+.coverage
+**/__pycache__
+**/.terraform
+terraform
+archive
+build
+html
+inventories
+output
+pds-log-samples
+*.egg-info
