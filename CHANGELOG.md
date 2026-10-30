@@ -1,12 +1,14 @@
 # Changelog
 
-## [«unknown»](https://github.com/NASA-PDS/o11y-cloudfront-batch/tree/«unknown») (2026-08-13)
+## [«unknown»](https://github.com/NASA-PDS/o11y-cloudfront-batch/tree/«unknown») (2026-10-06)
 
 [Full Changelog](https://github.com/NASA-PDS/o11y-cloudfront-batch/compare/v1.0.1...«unknown»)
 
 **Requirements:**
 
+- As a CloudOps Engineer, I want to ingest and parse CloudFront access logs in JSON format [\#75](https://github.com/NASA-PDS/o11y-cloudfront-batch/issues/75)
 - As a CloudOps Engineer, I want to ingest and parse CloudFront access logs in legacy W3C tab-delimited format [\#71](https://github.com/NASA-PDS/o11y-cloudfront-batch/issues/71)
+- As a user, I want to automatically deploy all cloudfront batch observability components [\#53](https://github.com/NASA-PDS/o11y-cloudfront-batch/issues/53)
 
 **Defects:**
 

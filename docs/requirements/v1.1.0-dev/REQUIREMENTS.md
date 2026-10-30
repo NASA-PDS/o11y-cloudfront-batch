@@ -48,7 +48,7 @@ This requirement is not impacted by the current version
 
 
 This requirement is not impacted by the current version
-## As a user, I want to automatically deploy all web analytics components ([#53](https://github.com/NASA-PDS/o11y-cloudfront-batch/issues/53)) 
+## As a user, I want to automatically deploy all cloudfront batch observability components ([#53](https://github.com/NASA-PDS/o11y-cloudfront-batch/issues/53)) 
 
 
 This requirement is not impacted by the current version
@@ -60,15 +60,11 @@ This requirement is not impacted by the current version
 
 
 This requirement is not impacted by the current version
-## Deploy web analytics infrastructure to Test environment ([#78](https://github.com/NASA-PDS/o11y-cloudfront-batch/issues/78)) 
+## Deploy o11y-cloudfront-batch infrastructure to Test environment ([#78](https://github.com/NASA-PDS/o11y-cloudfront-batch/issues/78)) 
 
 
 This requirement is not impacted by the current version
-## Deploy web analytics infrastructure to Prod environment ([#79](https://github.com/NASA-PDS/o11y-cloudfront-batch/issues/79)) 
-
-
-This requirement is not impacted by the current version
-## As an EN/node operator, I want clear documentation of the DUM onboarding process ([#80](https://github.com/NASA-PDS/o11y-cloudfront-batch/issues/80)) 
+## Deploy o11y-cloudfront-batch infrastructure to Prod environment ([#79](https://github.com/NASA-PDS/o11y-cloudfront-batch/issues/79)) 
 
 
 This requirement is not impacted by the current version
