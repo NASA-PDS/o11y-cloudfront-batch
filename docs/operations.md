@@ -236,5 +236,6 @@ bash <(curl -fsSL "${DEPLOY_URL}")
 ### Tuning
 
 - **Heap:** the deploy sets `-Xms`/`-Xmx` to half of system RAM, capped at the 8 GB in `jvm.options`. The default `t3.large` (8 GB) gets a 4 GB heap. Change the instance type with `logstash_instance_type` ([Update](../terraform/README.md#update)).
-- **Pipelines:** `logstash.yml` sets 1 worker, batch size 100, and a 2 GB persisted queue for every pipeline. `pipelines.yml.template` overrides the EN pipeline to 6 workers and batch size 500.
+- **Pipelines:** `logstash.yml` sets 4 workers, batch size 100, and a 2 GB persisted queue for every pipeline. `pipelines.yml.template` overrides the EN pipeline to 24 workers and batch size 500.
+- **Workers and CPU:** workers spend most of their time waiting on reverse DNS lookups, so the total can exceed the vCPU count. A worker that is waiting uses no CPU, and a pipeline with no data uses none. Size by CPU use, not by worker count. On the EC2, run `python3 /opt/o11y-cloudfront-batch/scripts/logstash-capacity-check.py` while data is flowing. If it reports an I/O-bound pipeline, raise that pipeline's workers. If it reports CPU saturated, adding workers does not help; add vCPUs or reduce the filter work. After enabling more nodes at once (`ENABLED_NODES`), rerun it and lower the workers only if CPU is saturated or the heap is high. In-flight events are about workers times batch size per pipeline.
 - Apply any change with the deploy script.
