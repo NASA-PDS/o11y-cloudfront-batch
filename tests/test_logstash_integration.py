@@ -41,7 +41,7 @@ class TestLogstashIntegration(unittest.TestCase):
             "template_errors": 0,
             "empty_user_agents": 1,
             "duplicate_sources": 0,
-            "processed_logs": 29,  # +2 url-field-parsing lines (10.99.1.1, 10.99.1.2), +1 cache-buster (91.107.144.23), +2 GEO IIS lines with time-taken "-"
+            "processed_logs": 30,  # +2 url-field-parsing lines (10.99.1.1, 10.99.1.2), +1 cache-buster (91.107.144.23), +2 GEO IIS lines with time-taken "-"
             "corrupt_logs": 3,
         },
         "ftp": {
@@ -51,10 +51,10 @@ class TestLogstashIntegration(unittest.TestCase):
             "template_errors": 0,
             "empty_user_agents": 0,
             "duplicate_sources": 0,
-            "processed_logs": 16,
-            # 6 deliberately invalid lines + the truncated IIS FTP fragment ("elClosed"); the IIS data-channel
+            "processed_logs": 20,
+            # 5 deliberately invalid lines + the truncated IIS FTP fragment ("elClosed"); the IIS data-channel
             # lines (sc-status "-") parse and are dropped as non-RETR commands
-            "corrupt_logs": 7,
+            "corrupt_logs": 6,
         },
         "cloudfront": {
             "parse_failures": 0,
@@ -517,27 +517,37 @@ class TestLogstashIntegration(unittest.TestCase):
         self.assertNotIn("query_parts", url2, "url.query_parts must not be set when there is no query string")
 
     def validate_iis_referer_parsing(self, output_dir: Path):
-        """Verify the cs(Referer) column in GEO IIS lines is not absorbed into user_agent.original."""
+        """Verify GEO IIS web lines keep their columns: client IP, port, user agent, referrer."""
         events = self.load_processed_events(output_dir)
         by_source = {e.get("source", {}).get("address"): e for e in events}
-        expected_referrers = {
-            "91.199.87.198": None,
-            "54.250.58.217": None,
-            "54.250.58.218": "https://example.org/search?q=lro",
+        plus_ua = "Mozilla/5.0+(Windows+NT+10.0;+Win64;+x64)"
+        space_ua = (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/140.0.0.0 Safari/537.36"
+        )
+        expected = {
+            "91.199.87.198": (plus_ua, None),
+            "54.250.58.217": (plus_ua, None),
+            "54.250.58.218": (plus_ua, "https://example.org/search?q=lro"),
+            "156.68.99.212": (space_ua, None),
         }
-        for address, referrer in expected_referrers.items():
+        for address, (user_agent, referrer) in expected.items():
             self.assertIn(address, by_source, f"Expected a processed GEO IIS event for {address}")
             event = by_source[address]
             self.assertEqual(
                 event.get("user_agent", {}).get("original"),
-                "Mozilla/5.0+(Windows+NT+10.0;+Win64;+x64)",
-                "user_agent.original must not include the referer column",
+                user_agent,
+                "user_agent.original must not include the client IP or the referer column",
             )
             self.assertEqual(
                 event.get("http", {}).get("request", {}).get("referrer"),
                 referrer,
                 "http.request.referrer must hold the referer, and be unset when it is '-'",
             )
+            self.assertEqual(str(event.get("server", {}).get("port")), "80", "server.port must be the numeric port")
+            self.assertEqual(event.get("http", {}).get("response", {}).get("status_code"), 200)
+            self.assertEqual(str(event.get("error", {}).get("code")), "0", "the win32 status must reach error.code")
+            self.assertNotIn("iis", event, "sub-status and win32 status must use the http.response fields")
 
     def test_https_log_processing(self):
         """Test processing of HTTPS logs."""
