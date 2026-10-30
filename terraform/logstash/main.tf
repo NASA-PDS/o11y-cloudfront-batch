@@ -60,7 +60,7 @@ resource "aws_vpc_security_group_egress_rule" "logstash_all_outbound" {
 }
 
 module "ec2" {
-  source = "git@github.com:NASA-PDS/pdc-tf-modules.git//terraform/modules/ec2?ref=develop"
+  source = "git@github.com:NASA-PDS/pdc-tf-modules.git//terraform/modules/ec2?ref=v1.0.0"
   count  = var.manage_ec2_instance ? 1 : 0
 
   ami_id                     = var.ami_id

@@ -9,7 +9,7 @@
 
 # TODO: Update to main and tagged branch after testing has completed
 module "ec2_instance_role" {
-  source = "git@github.com:NASA-PDS/pdc-tf-modules.git//terraform/modules/iam/roles/ec2?ref=develop"
+  source = "git@github.com:NASA-PDS/pdc-tf-modules.git//terraform/modules/iam/roles/ec2?ref=v1.0.0"
 
   venue                       = var.venue
   component                   = var.component
