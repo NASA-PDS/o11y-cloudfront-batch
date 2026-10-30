@@ -545,6 +545,9 @@ class TestLogstashIntegration(unittest.TestCase):
                 "http.request.referrer must hold the referer, and be unset when it is '-'",
             )
             self.assertEqual(str(event.get("server", {}).get("port")), "80", "server.port must be the numeric port")
+            self.assertEqual(event.get("http", {}).get("response", {}).get("status_code"), 200)
+            self.assertEqual(str(event.get("error", {}).get("code")), "0", "the win32 status must reach error.code")
+            self.assertNotIn("iis", event, "sub-status and win32 status must use the http.response fields")
 
     def test_https_log_processing(self):
         """Test processing of HTTPS logs."""
