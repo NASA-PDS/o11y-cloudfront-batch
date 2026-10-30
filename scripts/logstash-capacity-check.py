@@ -41,7 +41,10 @@ CORE_HOT = 90.0  # percent; a single core at or above this counts as pegged
 HEAP_HIGH = 85.0
 GC_HIGH = 10.0  # percent of wall time spent in garbage collection
 STEAL_HIGH = 10.0
+STEAL_CAPPED_BUSY = 70.0  # percent busy; with steal at or above STEAL_HIGH, CPU counts as saturated
 IO_BOUND_CPU = 30.0  # percent; busy workers with system CPU below this are waiting, not computing
+IO_CPU_TARGET = 0.7  # fraction of the cores Logstash may use after adding workers to an I/O-bound pipeline
+IO_MAX_SCALE = 4.0  # largest worker multiplier suggested in one step
 PUSH_BLOCKED_HIGH = 0.5  # fraction of the window the inputs spent blocked on a full queue
 LOW_CREDITS = 10.0
 
@@ -296,18 +299,24 @@ def main() -> int:
         )
     if steal is not None and steal >= STEAL_HIGH:
         findings.append(
-            f"Steal time is {steal:.0f}%: the hypervisor is withholding CPU, typical of an exhausted t-family "
-            "credit balance. Enable unlimited mode or move to a non-burstable type (m6i/c6i)."
+            f"Steal time is {steal:.0f}%: the hypervisor is withholding CPU, so part of the idle CPU cannot be "
+            "used. On a t-family instance in standard credit mode this means the credit balance is exhausted "
+            "(enable unlimited mode); in unlimited mode or on any other type it is host contention or the "
+            "surplus-credit limit, and a non-burstable type (m6i/c6i) is the fix. Check "
+            "aws ec2 describe-instance-credit-specifications."
         )
     if credits is not None and credits <= LOW_CREDITS:
         findings.append(
             f"CPU credit balance is {credits:.0f}: the instance is throttled to its baseline. Enable unlimited "
             "mode (aws ec2 modify-instance-credit-specification) or use a non-burstable type for re-ingests."
         )
-    if active and sys_busy is not None and sys_busy >= BUSY_HIGH:
+    # Busy time includes steal, and stolen CPU cannot be used, so high steal means the box is effectively full.
+    capped = sys_busy is not None and steal is not None and steal >= STEAL_HIGH and sys_busy >= STEAL_CAPPED_BUSY
+    if active and sys_busy is not None and (sys_busy >= BUSY_HIGH or capped):
         findings.append(
-            f"CPU is saturated ({sys_busy:.0f}% busy). You are using all the compute you have; more workers "
-            "will not help. Get more vCPUs or make the filters cheaper (see the slowest plugins below)."
+            f"CPU is effectively saturated ({sys_busy:.0f}% busy, {steal:.0f}% of it steal). You are using all "
+            "the compute you have; more workers will not help. Get more or non-throttled vCPUs, or make the "
+            "filters cheaper (see the slowest plugins below)."
         )
     elif active:
         n_active = len(active)
@@ -319,14 +328,16 @@ def main() -> int:
                 share = top_ms / (sum(d[0] for d in deltas) or 1)
                 if sys_busy is not None and sys_busy < IO_BOUND_CPU and share >= 0.5:
                     # Workers are blocked inside one plugin, not computing: waiting threads cost no CPU.
-                    target = min(4 * vcpus // n_active, max(workers * 4, vcpus // n_active))
+                    # Scale workers by the CPU headroom (at most 4x), keeping Logstash under IO_CPU_TARGET of the cores.
+                    scale = IO_MAX_SCALE if not ls_cores else min(IO_MAX_SCALE, IO_CPU_TARGET * vcpus / ls_cores)
+                    target = min(4 * vcpus, max(workers + 1, round(workers * scale)))
                     findings.append(
                         f"Pipeline '{name}': I/O-bound. {top_label} holds {100 * share:.0f}% of worker time "
                         f"({top_ms / 1000:.0f}s in a {elapsed:.0f}s window) while the system is only "
                         f"{sys_busy:.0f}% busy, so the workers are waiting on '{top_name}', not computing. "
-                        f"Fix what '{top_name}' waits on first (caching, timeouts, retries). Raising "
-                        f"pipeline.workers from {workers} to about {target} also helps because waiting "
-                        "threads use no CPU, but it only hides the delay."
+                        f"Waiting threads use no CPU, so raise pipeline.workers from {workers} to about {target} "
+                        f"to keep more '{top_name}' calls in flight. Also cut the wait per call "
+                        "(caching, shorter timeouts, fewer retries)."
                     )
                     continue
                 target = min(vcpus, max(workers + 1, vcpus // n_active))
@@ -353,10 +364,12 @@ def main() -> int:
         if slow and util >= BUSY_HIGH:
             findings.append(f"Pipeline '{name}': slowest plugins in the window: {', '.join(slow)}.")
     total_workers = sum(rows[n][0] for n in active)
-    if total_workers > 2 * vcpus:
+    cpu_pressure = sys_busy is not None and (sys_busy >= BUSY_HIGH or capped)
+    if total_workers > 2 * vcpus and cpu_pressure:
         findings.append(
-            f"Active pipelines have {total_workers} workers in total on {vcpus} vCPUs; oversubscribed, so workers "
-            "compete for cores. Lower per-pipeline workers or run fewer nodes at once (ENABLED_NODES)."
+            f"Active pipelines have {total_workers} workers in total on {vcpus} vCPUs and the CPU is under "
+            "pressure, so workers compete for cores. Lower per-pipeline workers or run fewer nodes at once "
+            "(ENABLED_NODES)."
         )
     if heap is not None and heap >= HEAP_HIGH:
         findings.append(f"Heap is {heap}% used: raise -Xmx (up to half of RAM) or lower pipeline.batch.size.")
