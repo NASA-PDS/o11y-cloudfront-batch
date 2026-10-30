@@ -2,15 +2,15 @@
 # =====================================================
 #
 # Multi-stage build:
-#   base  — Logstash + plugins + PDS config (shared by prod and test)
-#   prod  — Production image for ECS Fargate deployment
+#   base  — Logstash + plugins + PDS config (shared by both targets)
+#   prod  — Minimal Logstash image used as a base for local testing
 #   test  — Adds Python to run the integration test suite locally
 #
-# Production usage (ECS injects env vars via task definition):
-#   docker build --target prod -t pds-web-analytics .
-#   docker run --env-file .env pds-web-analytics
+# NOTE: The prod target is NOT deployed anywhere. It exists only as
+# an intermediate stage for the test target. All production Logstash
+# runs are on an EC2 instance managed via systemd (see terraform/README.md).
 #
-# Test usage:
+# Test usage (the only supported use case):
 #   docker compose run test
 #
 
@@ -46,19 +46,15 @@ RUN chmod +x /usr/local/bin/entrypoint.sh
 
 ENV LS_SETTINGS_DIR=/usr/share/logstash/pds-config/config
 
-# Logstash persistent queue — mount an EFS volume here in ECS
 VOLUME ["/var/lib/logstash"]
 
 USER logstash
 
 # -----------------------------------------------------------------------------
-# prod — Production image deployed to ECS Fargate
+# prod — Minimal Logstash image used as an intermediate stage for testing.
 #
-# Required env vars (set in ECS task definition, not baked in):
-#   S3_BUCKET_NAME   — S3 bucket containing log files
-#   OPENSEARCH_URL   — AWS OpenSearch Service endpoint
-#   INDEX_PREFIX     — OpenSearch index name prefix
-#   AWS_REGION       — AWS region (e.g. us-west-2)
+# NOT deployed to production. Production runs on EC2 via systemd RPM install.
+# See terraform/README.md for the actual deployment process.
 # -----------------------------------------------------------------------------
 FROM base AS prod
 
@@ -96,4 +92,4 @@ RUN mkdir -p /app/output
 
 ENV OUTPUT_DIR=/app/output
 
-CMD ["python", "-m", "unittest", "tests.test_logstash_integration", "-v"]
+CMD ["python", "-m", "unittest", "tests.test_logstash_integration", "tests.test_logstash_log_years", "-v"]

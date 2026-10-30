@@ -1,24 +1,42 @@
 #!/bin/bash
 # logstash-deploy.sh — Deploy config and (re)start Logstash on the
-# web-analytics EC2. No sudo required — run entirely as the `logstash` user.
+# o11y-cloudfront-batch EC2. No sudo required — run entirely as the `pdsops` key-user.
 #
 # Safe to re-run: pulls latest config, updates the env file, and restarts
 # the systemd --user logstash service.
 #
-# Usage (as the logstash user — e.g. an SSM Run-As session):
-#   bash /opt/web-analytics/scripts/logstash-deploy.sh
+# Can be piped directly from GitHub (no prior repo checkout needed):
+#   bash <(curl -fsSL https://raw.githubusercontent.com/NASA-PDS/o11y-cloudfront-batch/main/scripts/logstash-deploy.sh)
+#
+# Or run from an existing checkout:
+#   bash /opt/o11y-cloudfront-batch/scripts/logstash-deploy.sh
 #
 # Requires scripts/logstash-bootstrap.sh to have been run first (root, once)
-# to install Logstash and provision this account — this script will refuse
+# to install Logstash and configure the pdsops account — this script will refuse
 # to run otherwise.
 #
 # Optional env overrides (all auto-populated from SSM/metadata if not set):
+#   REPO_DIR                 — where to clone/update the repo (default: /opt/o11y-cloudfront-batch)
+#                              override to /usr/local/applications/o11y-cloudfront-batch if required
+#   REPO_BRANCH              — git branch to deploy (default: main)
 #   OPENSEARCH_ENDPOINT      — OpenSearch domain endpoint (without https://)
 #   S3_BUCKET_NAME           — S3 bucket for log ingestion
 #   AWS_REGION               — AWS region (default: us-west-2)
 #   INDEX_PREFIX             — OpenSearch index prefix (default: pds-weblogs)
 #   S3_CF_BUCKET_NAME        — CloudFront logs bucket (EN only; default: empty)
-#   REPO_BRANCH              — git branch to deploy (default: main)
+#   ENABLED_NODES            — comma/space-separated node IDs to enable
+#                              (atm, en, geo, img, naif, ppi, rings, sbn).
+#                              Default: all nodes. Use this for a staged
+#                              rollout -- e.g. ENABLED_NODES=en on the first
+#                              deploy to let EN's backlog catch up alone,
+#                              then redeploy with it unset to bring the rest
+#                              online.
+#   LOG_YEARS                — comma/space-separated years or YYYY-YYYY ranges
+#                              (e.g. "2023" or "2021-2024"). Each S3 input reads
+#                              only objects dated in those years. Default: all
+#                              years. To load more years later, redeploy with
+#                              the longer list; years already loaded keep their
+#                              read position.
 #
 # Daily egress report cron job — installed only when EGRESS_REPORT_RECIPIENTS
 # is set (REQUIRED at deploy time to enable the report; everything else has
@@ -31,7 +49,7 @@
 #                              recommended source — no AWS permissions needed
 #                              beyond reading a file already on disk. Create
 #                              it once by hand (mode 600, owned by logstash);
-#                              see README.md "Enable/update the daily egress
+#                              see docs/operations.md "Enable/update the daily egress
 #                              report email".
 #   SMTP_CONFIG_SSM_KEY_PATH — SSM path prefix holding SMTP creds instead of
 #                              a local file — only used as a fallback if
@@ -45,13 +63,13 @@
 set -euo pipefail
 
 if [ "$(id -u)" -eq 0 ]; then
-  echo "ERROR: logstash-deploy.sh must NOT be run as root — run it as the logstash user." >&2
+  echo "ERROR: logstash-deploy.sh must NOT be run as root — run it as the pdsops user." >&2
   exit 1
 fi
 
-REPO_URL="https://github.com/NASA-PDS/web-analytics.git"
+REPO_URL="https://github.com/NASA-PDS/o11y-cloudfront-batch.git"
 REPO_BRANCH="${REPO_BRANCH:-main}"
-REPO_DIR="${REPO_DIR:-/opt/web-analytics}"
+REPO_DIR="${REPO_DIR:-/opt/o11y-cloudfront-batch}"
 LOGSTASH_CONFIG_DIR="/etc/logstash"
 INDEX_PREFIX="${INDEX_PREFIX:-pds-weblogs}"
 
@@ -60,27 +78,37 @@ INDEX_PREFIX="${INDEX_PREFIX:-pds-weblogs}"
 # silently defaulting to empty -- an empty bucket name templates into the EN
 # CloudFront pipeline as `bucket => ""`, which fails at Logstash runtime with
 # a confusing "not authorized to perform: s3:ListAllMyBuckets" AccessDenied
-# error rather than a clear "bucket not set" message. See README.md
+# error rather than a clear "bucket not set" message. See docs/operations.md
 # Troubleshooting > Common Issues.
 if [ -z "${S3_CF_BUCKET_NAME:-}" ] && [ -f "$LOGSTASH_CONFIG_DIR/env" ]; then
   S3_CF_BUCKET_NAME="$(grep -E '^S3_CF_BUCKET_NAME=' "$LOGSTASH_CONFIG_DIR/env" | tail -1 | cut -d= -f2-)"
 fi
 S3_CF_BUCKET_NAME="${S3_CF_BUCKET_NAME:-}"
+ENABLED_NODES="${ENABLED_NODES:-}"
+LOG_YEARS="${LOG_YEARS:-}"
 
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 
+# The pdsops login PATH does not include /usr/local/bin, where the AWS CLI is installed.
+export PATH="/usr/local/bin:$PATH"
+
 if [ ! -f /usr/share/logstash/bin/logstash ]; then
-  echo "ERROR: Logstash is not installed. An admin must run 'sudo bash scripts/logstash-bootstrap.sh' first." >&2
+  echo "ERROR: Logstash is not installed. An SA must run 'sudo bash scripts/logstash-bootstrap.sh' first." >&2
+  exit 1
+fi
+
+if [ -z "${OPENSEARCH_ENDPOINT:-}" ] && ! command -v aws >/dev/null 2>&1; then
+  echo "ERROR: the AWS CLI ('aws') is not on PATH. Install it, or set OPENSEARCH_ENDPOINT to skip the SSM lookup." >&2
   exit 1
 fi
 
 AWS_REGION="${AWS_REGION:-us-west-2}"
 OPENSEARCH_ENDPOINT="${OPENSEARCH_ENDPOINT:-$(aws ssm get-parameter \
-  --name /pds/observability/opensearch/opensearch_endpoint \
+  --name /pds/o11y-platform/opensearch/opensearch_endpoint \
   --region "$AWS_REGION" \
   --query Parameter.Value --output text)}"
 
-echo "=== web-analytics Logstash deploy ==="
+echo "=== o11y-cloudfront-batch Logstash deploy ==="
 echo "Repo:     $REPO_URL ($REPO_BRANCH)"
 echo "Endpoint: $OPENSEARCH_ENDPOINT"
 if [ -z "$S3_CF_BUCKET_NAME" ]; then
@@ -91,12 +119,14 @@ if [ -z "$S3_CF_BUCKET_NAME" ]; then
 else
   echo "CF Bucket: $S3_CF_BUCKET_NAME"
 fi
+echo "Enabled nodes: ${ENABLED_NODES:-all}"
+echo "Log years: ${LOG_YEARS:-all}"
 echo ""
 
 # ----------------------------------------
 # 1. Clone or update the repo
 # ----------------------------------------
-echo "--- Deploying web-analytics repo ---"
+echo "--- Deploying o11y-cloudfront-batch repo ---"
 if [ -d "$REPO_DIR/.git" ]; then
   echo "Repo already exists — pulling latest $REPO_BRANCH"
   git -C "$REPO_DIR" fetch origin
@@ -113,8 +143,18 @@ echo "--- Deploying Logstash pipeline config ---"
 cp -r "$REPO_DIR/config/logstash/config/"* "$LOGSTASH_CONFIG_DIR/"
 echo "Config deployed to $LOGSTASH_CONFIG_DIR"
 
+# Size the JVM heap to half of system RAM, capped at the 8 GB set in jvm.options.
+# A heap larger than the instance can reserve makes the JVM exit at startup.
+MEM_TOTAL_MB="$(awk '/^MemTotal:/ {print int($2 / 1024)}' /proc/meminfo)"
+HEAP_MB=$(( MEM_TOTAL_MB / 2 ))
+if [ "$HEAP_MB" -gt 8192 ]; then
+  HEAP_MB=8192
+fi
+sed -i -E "s/^-Xms.*/-Xms${HEAP_MB}m/; s/^-Xmx.*/-Xmx${HEAP_MB}m/" "$LOGSTASH_CONFIG_DIR/jvm.options"
+echo "JVM heap: ${HEAP_MB} MB (system RAM ${MEM_TOTAL_MB} MB)"
+
 echo "--- Building Logstash pipeline configs ---"
-LS_SETTINGS_DIR="$LOGSTASH_CONFIG_DIR" \
+LS_SETTINGS_DIR="$LOGSTASH_CONFIG_DIR" ENABLED_NODES="$ENABLED_NODES" LOG_YEARS="$LOG_YEARS" \
   bash "$REPO_DIR/scripts/logstash_build_config.sh"
 echo "pipelines.yml and pipeline configs generated"
 
@@ -128,7 +168,7 @@ TEMPLATE_FILE="$REPO_DIR/config/opensearch/ecs-8.17-custom-template.json"
 TEMPLATE_RESPONSE_FILE="$(mktemp)"
 CURL_EXIT=0
 RESPONSE=$(curl -s --connect-timeout 10 --max-time 60 -o "$TEMPLATE_RESPONSE_FILE" -w "%{http_code}" \
-  -X PUT "https://${OPENSEARCH_ENDPOINT}/_index_template/pds-web-analytics" \
+  -X PUT "https://${OPENSEARCH_ENDPOINT}/_index_template/pds-o11y-cloudfront-batch" \
   -H 'Content-Type: application/json' \
   -H "x-amz-security-token: ${AWS_SESSION_TOKEN}" \
   --aws-sigv4 "aws:amz:${AWS_REGION}:es" \
@@ -156,7 +196,7 @@ echo "--- Configuring Logstash service ---"
 ENV_FILE="$LOGSTASH_CONFIG_DIR/env"
 
 S3_BUCKET_NAME="${S3_BUCKET_NAME:-$(aws ssm get-parameter \
-  --name /pds/web-analytics/s3/bucket_name \
+  --name /pds/o11y-cloudfront-batch/s3/bucket_name \
   --region "$AWS_REGION" \
   --query Parameter.Value --output text)}"
 
@@ -194,10 +234,11 @@ else
   if [ ! -f "$SMTP_ENV_FILE" ] && [ -z "$SMTP_CONFIG_SSM_KEY_PATH" ]; then
     echo "WARNING: $SMTP_ENV_FILE does not exist and SMTP_CONFIG_SSM_KEY_PATH is not set — the cron"
     echo "job will be installed but will fail until you create $SMTP_ENV_FILE (mode 600, owned by"
-    echo "logstash) with username/password/server/sender lines. See README.md 'Enable/update the"
+    echo "logstash) with username/password/server/sender lines. See docs/operations.md 'Enable/update the"
     echo "daily egress report email'."
   fi
-  CRON_CMD="PYTHONPATH=\"$REPO_DIR/src\" AWS_REGION=\"$AWS_REGION\" python3.13 \"$REPO_DIR/scripts/egress_report.py\" --opensearch-endpoint \"$OPENSEARCH_ENDPOINT\" --index-pattern \"${INDEX_PREFIX}-*\" --region \"$AWS_REGION\" --smtp-env-file \"$SMTP_ENV_FILE\""
+  PYTHON_BIN="$(command -v python3.13 2>/dev/null || echo python3)"
+  CRON_CMD="PYTHONPATH=\"$REPO_DIR/src\" AWS_REGION=\"$AWS_REGION\" $PYTHON_BIN \"$REPO_DIR/scripts/egress_report.py\" --opensearch-endpoint \"$OPENSEARCH_ENDPOINT\" --index-pattern \"${INDEX_PREFIX}-*\" --region \"$AWS_REGION\" --smtp-env-file \"$SMTP_ENV_FILE\""
   if [ -n "$SMTP_CONFIG_SSM_KEY_PATH" ]; then
     CRON_CMD="$CRON_CMD --smtp-config-ssm-path \"$SMTP_CONFIG_SSM_KEY_PATH\""
   fi

@@ -1,0 +1,9 @@
+# IAM - dev venue
+# Copy to dev.tfvars and fill in values.
+# Shared values (aws_region, partition, tenant, component, cicd) are in common-dev.tfvars.
+
+venue                       = "dev"
+managedby                   = "<your-email>"
+ec2users_dynamodb_table_arn = "<arn:aws:dynamodb:us-west-2:account-id:table/ec2users>"
+
+logs_s3_bucket_name = ""  # name of the s3 module's bucket: <s3_bucket_prefix>-web-analytics

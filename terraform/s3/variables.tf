@@ -36,11 +36,6 @@ variable "partition" {
 }
 
 variable "s3_bucket_prefix" {
-  description = "Prefix for the S3 bucket name only (e.g. pds-dev-gh01dc). May include CI/CD pipeline identifiers for existing buckets."
-  type        = string
-}
-
-variable "ec2_role_name" {
-  description = "Existing PDS EC2 IAM role name — used in the S3 bucket policy AllowEC2Role statement"
+  description = "Prefix for the S3 bucket name only. The bucket is named <prefix>-web-analytics. May include a CI/CD identifier."
   type        = string
 }

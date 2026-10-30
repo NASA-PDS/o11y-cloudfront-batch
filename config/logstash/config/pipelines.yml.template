@@ -3,8 +3,8 @@
 
 - pipeline.id: en
   path.config: "$LS_SETTINGS_DIR/pipelines/pipeline-pds-input-s3-en.conf"
-  pipeline.workers: 2
-  pipeline.batch.size: 200
+  pipeline.workers: 6
+  pipeline.batch.size: 500
 
 - pipeline.id: geo
   path.config: "$LS_SETTINGS_DIR/pipelines/pipeline-pds-input-s3-geo.conf"

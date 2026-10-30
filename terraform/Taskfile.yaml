@@ -1,16 +1,12 @@
-# Taskfile for web-analytics Terraform
+# Taskfile for o11y-cloudfront-batch Terraform
 # =====================================
 #
-# Modules and their deployment order:
-#   0. pdc-observability     - OpenSearch domain, bootstrapped with web_analytics_enabled=false
-#                              (deploy first, separate repo)
-#   1. iam/policies/         - IAM policy + role attachment (admin required); publishes
-#                              ec2_role_arn to SSM
-#   1.5. pdc-observability   - re-apply with web_analytics_enabled=true (access-policy update
-#                              only, separate repo) — Logstash gets 403s from OpenSearch until
-#                              this runs
-#   2. s3/                   - S3 log bucket (Project-Power-User)
-#   3. logstash/             - Logstash EC2 instance (admin required — iam:PassRole)
+# Local iteration wrapper. Operational deploys (dev, test, prod) use Terragrunt from
+# cds-infra-deploy, as described in the o11y-platform deployment runbook:
+#   https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md
+# The runbook owns the deployment order and the permission tier of each module.
+#
+# Modules: iam/, s3/, logstash/
 #
 # Prerequisites:
 #   brew install go-task/tap/go-task
@@ -18,13 +14,17 @@
 #   export AWS_SECRET_ACCESS_KEY=...
 #   export AWS_DEFAULT_REGION=...
 #
+# Terraform state backend:
+#   Backend bucket names are not stored in this repo. Supply TFSTATE_BUCKET before running
+#   any *:init task, or use cds-infra-deploy Terragrunt (which reads it from venue.hcl):
+#     export TFSTATE_BUCKET=<tfstate-bucket-name>   # e.g. pds-dev-infra or pds-prod-infra
+#     task s3:init VENUE=dev
+#
 # tfvars:
-#   By default, tfvars are read from a local cds-infra-deploy checkout:
-#     export CDS_INFRA_DEPLOY_DIR=/path/to/cds-infra-deploy
+#   Every task reads this repo's own gitignored tfvars, copied from the examples:
+#     cp -p tfvars/common.tfvars.example tfvars/common-dev.tfvars
+#     cp -p s3/tfvars/dev.tfvars.example s3/tfvars/dev.tfvars
 #     task s3:plan VENUE=dev
-#   To use this repo's own (gitignored) tfvars/ dirs instead -- e.g. for personal
-#   iteration before promoting values to cds-infra-deploy -- pass LOCAL=1:
-#     task s3:plan VENUE=dev LOCAL=1
 
 ---
 
@@ -62,7 +62,7 @@ tasks:
     # ------------------------------------------------------------------
 
     s3:init:
-        desc: "Initialize S3 module Terraform"
+        desc: "Initialize S3 module Terraform (set TFSTATE_BUCKET env var or use cds-infra-deploy Terragrunt)"
         deps: [aws]
         dir: s3
         requires:
@@ -70,7 +70,10 @@ tasks:
                 - name: VENUE
                   enum: [dev, test, prod]
         cmds:
-            - terraform init -no-color -reconfigure -backend-config=backend-{{.VENUE}}.hcl {{.CLI_ARGS}}
+            - |
+              BACKEND_ARGS=""
+              [ -n "$TFSTATE_BUCKET" ] && BACKEND_ARGS="-backend-config=bucket=$TFSTATE_BUCKET -backend-config=region=us-west-2 -backend-config=encrypt=true -backend-config=use_lockfile=true"
+              terraform init -no-color -reconfigure $BACKEND_ARGS {{.CLI_ARGS}}
 
     s3:validate:
         desc: "Validate S3 module Terraform files"
@@ -87,26 +90,8 @@ tasks:
                 - name: VENUE
                   enum: [dev, test, prod]
         vars:
-            TFVARS_COMMON:
-                sh: |
-                    if [ "{{.LOCAL}}" = "1" ]; then
-                        echo "../tfvars/common-{{.VENUE}}.tfvars"
-                    elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/web-analytics/common.tfvars"
-                    else
-                        echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
-                        exit 1
-                    fi
-            TFVARS_MODULE:
-                sh: |
-                    if [ "{{.LOCAL}}" = "1" ]; then
-                        echo "tfvars/{{.VENUE}}.tfvars"
-                    elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/web-analytics/s3.tfvars"
-                    else
-                        echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
-                        exit 1
-                    fi
+            TFVARS_COMMON: "../tfvars/common-{{.VENUE}}.tfvars"
+            TFVARS_MODULE: "tfvars/{{.VENUE}}.tfvars"
         cmds:
             - terraform plan -var-file={{.TFVARS_COMMON}} -var-file={{.TFVARS_MODULE}} {{.CLI_ARGS}}
 
@@ -120,26 +105,8 @@ tasks:
                 - name: VENUE
                   enum: [dev, test, prod]
         vars:
-            TFVARS_COMMON:
-                sh: |
-                    if [ "{{.LOCAL}}" = "1" ]; then
-                        echo "../tfvars/common-{{.VENUE}}.tfvars"
-                    elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/web-analytics/common.tfvars"
-                    else
-                        echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
-                        exit 1
-                    fi
-            TFVARS_MODULE:
-                sh: |
-                    if [ "{{.LOCAL}}" = "1" ]; then
-                        echo "tfvars/{{.VENUE}}.tfvars"
-                    elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/web-analytics/s3.tfvars"
-                    else
-                        echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
-                        exit 1
-                    fi
+            TFVARS_COMMON: "../tfvars/common-{{.VENUE}}.tfvars"
+            TFVARS_MODULE: "tfvars/{{.VENUE}}.tfvars"
         cmds:
             - terraform apply -var-file={{.TFVARS_COMMON}} -var-file={{.TFVARS_MODULE}} {{.CLI_ARGS}}
 
@@ -152,26 +119,8 @@ tasks:
                 - name: VENUE
                   enum: [dev, test, prod]
         vars:
-            TFVARS_COMMON:
-                sh: |
-                    if [ "{{.LOCAL}}" = "1" ]; then
-                        echo "../tfvars/common-{{.VENUE}}.tfvars"
-                    elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/web-analytics/common.tfvars"
-                    else
-                        echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
-                        exit 1
-                    fi
-            TFVARS_MODULE:
-                sh: |
-                    if [ "{{.LOCAL}}" = "1" ]; then
-                        echo "tfvars/{{.VENUE}}.tfvars"
-                    elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/web-analytics/s3.tfvars"
-                    else
-                        echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
-                        exit 1
-                    fi
+            TFVARS_COMMON: "../tfvars/common-{{.VENUE}}.tfvars"
+            TFVARS_MODULE: "tfvars/{{.VENUE}}.tfvars"
         cmds:
             - terraform apply -destroy -var-file={{.TFVARS_COMMON}} -var-file={{.TFVARS_MODULE}} {{.CLI_ARGS}}
 
@@ -184,26 +133,8 @@ tasks:
                 - name: VENUE
                   enum: [dev, test, prod]
         vars:
-            TFVARS_COMMON:
-                sh: |
-                    if [ "{{.LOCAL}}" = "1" ]; then
-                        echo "../tfvars/common-{{.VENUE}}.tfvars"
-                    elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/web-analytics/common.tfvars"
-                    else
-                        echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
-                        exit 1
-                    fi
-            TFVARS_MODULE:
-                sh: |
-                    if [ "{{.LOCAL}}" = "1" ]; then
-                        echo "tfvars/{{.VENUE}}.tfvars"
-                    elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/web-analytics/s3.tfvars"
-                    else
-                        echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
-                        exit 1
-                    fi
+            TFVARS_COMMON: "../tfvars/common-{{.VENUE}}.tfvars"
+            TFVARS_MODULE: "tfvars/{{.VENUE}}.tfvars"
         cmds:
             - terraform plan -refresh-only -var-file={{.TFVARS_COMMON}} -var-file={{.TFVARS_MODULE}} {{.CLI_ARGS}}
 
@@ -216,37 +147,19 @@ tasks:
                 - name: VENUE
                   enum: [dev, test, prod]
         vars:
-            TFVARS_COMMON:
-                sh: |
-                    if [ "{{.LOCAL}}" = "1" ]; then
-                        echo "../tfvars/common-{{.VENUE}}.tfvars"
-                    elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/web-analytics/common.tfvars"
-                    else
-                        echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
-                        exit 1
-                    fi
-            TFVARS_MODULE:
-                sh: |
-                    if [ "{{.LOCAL}}" = "1" ]; then
-                        echo "tfvars/{{.VENUE}}.tfvars"
-                    elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/web-analytics/s3.tfvars"
-                    else
-                        echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
-                        exit 1
-                    fi
+            TFVARS_COMMON: "../tfvars/common-{{.VENUE}}.tfvars"
+            TFVARS_MODULE: "tfvars/{{.VENUE}}.tfvars"
         cmds:
             - terraform apply -refresh-only -var-file={{.TFVARS_COMMON}} -var-file={{.TFVARS_MODULE}} {{.CLI_ARGS}}
 
     # ------------------------------------------------------------------
     # Logstash: EC2 instance
-    # Requires iam:PassRole — must be run by a system administrator.
+    # Requires iam:PassRole (Platform Engineer tier).
     # Run after opensearch:deploy (reads endpoint from SSM) and iam:deploy.
     # ------------------------------------------------------------------
 
     logstash:init:
-        desc: "Initialize Logstash EC2 module Terraform (requires admin — iam:PassRole)"
+        desc: "Initialize Logstash EC2 module Terraform (requires iam:PassRole; set TFSTATE_BUCKET env var or use cds-infra-deploy Terragrunt)"
         deps: [aws]
         dir: logstash
         requires:
@@ -254,7 +167,10 @@ tasks:
                 - name: VENUE
                   enum: [dev, test, prod]
         cmds:
-            - terraform init -no-color -reconfigure -backend-config=backend-{{.VENUE}}.hcl {{.CLI_ARGS}}
+            - |
+              BACKEND_ARGS=""
+              [ -n "$TFSTATE_BUCKET" ] && BACKEND_ARGS="-backend-config=bucket=$TFSTATE_BUCKET -backend-config=region=us-west-2 -backend-config=encrypt=true -backend-config=use_lockfile=true"
+              terraform init -no-color -reconfigure $BACKEND_ARGS {{.CLI_ARGS}}
 
     logstash:validate:
         desc: "Validate Logstash EC2 module Terraform files"
@@ -263,7 +179,7 @@ tasks:
             - terraform validate -no-color
 
     logstash:plan:
-        desc: "Plan Logstash EC2 instance changes (requires admin — iam:PassRole)"
+        desc: "Plan Logstash EC2 instance changes (requires iam:PassRole)"
         deps: ["logstash:init"]
         dir: logstash
         requires:
@@ -271,31 +187,13 @@ tasks:
                 - name: VENUE
                   enum: [dev, test, prod]
         vars:
-            TFVARS_COMMON:
-                sh: |
-                    if [ "{{.LOCAL}}" = "1" ]; then
-                        echo "../tfvars/common-{{.VENUE}}.tfvars"
-                    elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/web-analytics/common.tfvars"
-                    else
-                        echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
-                        exit 1
-                    fi
-            TFVARS_MODULE:
-                sh: |
-                    if [ "{{.LOCAL}}" = "1" ]; then
-                        echo "tfvars/{{.VENUE}}.tfvars"
-                    elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/web-analytics/logstash.tfvars"
-                    else
-                        echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
-                        exit 1
-                    fi
+            TFVARS_COMMON: "../tfvars/common-{{.VENUE}}.tfvars"
+            TFVARS_MODULE: "tfvars/{{.VENUE}}.tfvars"
         cmds:
             - terraform plan -var-file={{.TFVARS_COMMON}} -var-file={{.TFVARS_MODULE}} {{.CLI_ARGS}}
 
     logstash:deploy:
-        desc: "Deploy Logstash EC2 instance (requires admin — iam:PassRole)"
+        desc: "Deploy Logstash EC2 instance (requires iam:PassRole)"
         aliases: ["logstash:apply"]
         deps: ["logstash:init"]
         dir: logstash
@@ -304,26 +202,8 @@ tasks:
                 - name: VENUE
                   enum: [dev, test, prod]
         vars:
-            TFVARS_COMMON:
-                sh: |
-                    if [ "{{.LOCAL}}" = "1" ]; then
-                        echo "../tfvars/common-{{.VENUE}}.tfvars"
-                    elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/web-analytics/common.tfvars"
-                    else
-                        echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
-                        exit 1
-                    fi
-            TFVARS_MODULE:
-                sh: |
-                    if [ "{{.LOCAL}}" = "1" ]; then
-                        echo "tfvars/{{.VENUE}}.tfvars"
-                    elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/web-analytics/logstash.tfvars"
-                    else
-                        echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
-                        exit 1
-                    fi
+            TFVARS_COMMON: "../tfvars/common-{{.VENUE}}.tfvars"
+            TFVARS_MODULE: "tfvars/{{.VENUE}}.tfvars"
         cmds:
             - terraform apply -var-file={{.TFVARS_COMMON}} -var-file={{.TFVARS_MODULE}} {{.CLI_ARGS}}
 
@@ -336,26 +216,8 @@ tasks:
                 - name: VENUE
                   enum: [dev, test, prod]
         vars:
-            TFVARS_COMMON:
-                sh: |
-                    if [ "{{.LOCAL}}" = "1" ]; then
-                        echo "../tfvars/common-{{.VENUE}}.tfvars"
-                    elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/web-analytics/common.tfvars"
-                    else
-                        echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
-                        exit 1
-                    fi
-            TFVARS_MODULE:
-                sh: |
-                    if [ "{{.LOCAL}}" = "1" ]; then
-                        echo "tfvars/{{.VENUE}}.tfvars"
-                    elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/web-analytics/logstash.tfvars"
-                    else
-                        echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
-                        exit 1
-                    fi
+            TFVARS_COMMON: "../tfvars/common-{{.VENUE}}.tfvars"
+            TFVARS_MODULE: "tfvars/{{.VENUE}}.tfvars"
         cmds:
             - terraform apply -destroy -var-file={{.TFVARS_COMMON}} -var-file={{.TFVARS_MODULE}} {{.CLI_ARGS}}
 
@@ -368,26 +230,8 @@ tasks:
                 - name: VENUE
                   enum: [dev, test, prod]
         vars:
-            TFVARS_COMMON:
-                sh: |
-                    if [ "{{.LOCAL}}" = "1" ]; then
-                        echo "../tfvars/common-{{.VENUE}}.tfvars"
-                    elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/web-analytics/common.tfvars"
-                    else
-                        echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
-                        exit 1
-                    fi
-            TFVARS_MODULE:
-                sh: |
-                    if [ "{{.LOCAL}}" = "1" ]; then
-                        echo "tfvars/{{.VENUE}}.tfvars"
-                    elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/web-analytics/logstash.tfvars"
-                    else
-                        echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
-                        exit 1
-                    fi
+            TFVARS_COMMON: "../tfvars/common-{{.VENUE}}.tfvars"
+            TFVARS_MODULE: "tfvars/{{.VENUE}}.tfvars"
         cmds:
             - terraform plan -refresh-only -var-file={{.TFVARS_COMMON}} -var-file={{.TFVARS_MODULE}} {{.CLI_ARGS}}
 
@@ -400,81 +244,48 @@ tasks:
                 - name: VENUE
                   enum: [dev, test, prod]
         vars:
-            TFVARS_COMMON:
-                sh: |
-                    if [ "{{.LOCAL}}" = "1" ]; then
-                        echo "../tfvars/common-{{.VENUE}}.tfvars"
-                    elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/web-analytics/common.tfvars"
-                    else
-                        echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
-                        exit 1
-                    fi
-            TFVARS_MODULE:
-                sh: |
-                    if [ "{{.LOCAL}}" = "1" ]; then
-                        echo "tfvars/{{.VENUE}}.tfvars"
-                    elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/web-analytics/logstash.tfvars"
-                    else
-                        echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
-                        exit 1
-                    fi
+            TFVARS_COMMON: "../tfvars/common-{{.VENUE}}.tfvars"
+            TFVARS_MODULE: "tfvars/{{.VENUE}}.tfvars"
         cmds:
             - terraform apply -refresh-only -var-file={{.TFVARS_COMMON}} -var-file={{.TFVARS_MODULE}} {{.CLI_ARGS}}
 
     # ------------------------------------------------------------------
-    # IAM: EC2 policy + role attachment (requires admin/elevated role)
+    # IAM: EC2 role + profile, policy + role attachment (requires admin/elevated role)
     # Run by a system administrator — Project-Power-User lacks iam:CreatePolicy.
     # Must be applied before logstash:deploy (EC2 needs the policy attached at launch).
     # ------------------------------------------------------------------
 
     iam:init:
-        desc: "Initialize IAM policies module Terraform"
+        desc: "Initialize IAM policies module Terraform (set TFSTATE_BUCKET env var or use cds-infra-deploy Terragrunt)"
         deps: [aws]
-        dir: iam/policies
+        dir: iam
         requires:
             vars:
                 - name: VENUE
                   enum: [dev, test, prod]
         cmds:
-            - terraform init -no-color -reconfigure -backend-config=backend-{{.VENUE}}.hcl {{.CLI_ARGS}}
+            - |
+              BACKEND_ARGS=""
+              [ -n "$TFSTATE_BUCKET" ] && BACKEND_ARGS="-backend-config=bucket=$TFSTATE_BUCKET -backend-config=region=us-west-2 -backend-config=encrypt=true -backend-config=use_lockfile=true"
+              terraform init -no-color -reconfigure $BACKEND_ARGS {{.CLI_ARGS}}
 
     iam:validate:
         desc: "Validate IAM policies module Terraform files"
-        dir: iam/policies
+        dir: iam
         cmds:
             - terraform validate -no-color
 
     iam:plan:
         desc: "Plan IAM policy changes (requires iam:CreatePolicy permissions)"
         deps: ["iam:init"]
-        dir: iam/policies
+        dir: iam
         requires:
             vars:
                 - name: VENUE
                   enum: [dev, test, prod]
         vars:
-            TFVARS_COMMON:
-                sh: |
-                    if [ "{{.LOCAL}}" = "1" ]; then
-                        echo "../../tfvars/common-{{.VENUE}}.tfvars"
-                    elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/web-analytics/common.tfvars"
-                    else
-                        echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
-                        exit 1
-                    fi
-            TFVARS_MODULE:
-                sh: |
-                    if [ "{{.LOCAL}}" = "1" ]; then
-                        echo "tfvars/{{.VENUE}}.tfvars"
-                    elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/web-analytics/iam-policies.tfvars"
-                    else
-                        echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
-                        exit 1
-                    fi
+            TFVARS_COMMON: "../tfvars/common-{{.VENUE}}.tfvars"
+            TFVARS_MODULE: "tfvars/{{.VENUE}}.tfvars"
         cmds:
             - terraform plan -var-file={{.TFVARS_COMMON}} -var-file={{.TFVARS_MODULE}} {{.CLI_ARGS}}
 
@@ -482,128 +293,56 @@ tasks:
         desc: "Deploy IAM policies and role attachments (requires admin role)"
         aliases: ["iam:apply"]
         deps: ["iam:init"]
-        dir: iam/policies
+        dir: iam
         requires:
             vars:
                 - name: VENUE
                   enum: [dev, test, prod]
         vars:
-            TFVARS_COMMON:
-                sh: |
-                    if [ "{{.LOCAL}}" = "1" ]; then
-                        echo "../../tfvars/common-{{.VENUE}}.tfvars"
-                    elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/web-analytics/common.tfvars"
-                    else
-                        echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
-                        exit 1
-                    fi
-            TFVARS_MODULE:
-                sh: |
-                    if [ "{{.LOCAL}}" = "1" ]; then
-                        echo "tfvars/{{.VENUE}}.tfvars"
-                    elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/web-analytics/iam-policies.tfvars"
-                    else
-                        echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
-                        exit 1
-                    fi
+            TFVARS_COMMON: "../tfvars/common-{{.VENUE}}.tfvars"
+            TFVARS_MODULE: "tfvars/{{.VENUE}}.tfvars"
         cmds:
             - terraform apply -var-file={{.TFVARS_COMMON}} -var-file={{.TFVARS_MODULE}} {{.CLI_ARGS}}
 
     iam:destroy:
         desc: "Destroy IAM policies and role attachments"
         deps: ["iam:init"]
-        dir: iam/policies
+        dir: iam
         requires:
             vars:
                 - name: VENUE
                   enum: [dev, test, prod]
         vars:
-            TFVARS_COMMON:
-                sh: |
-                    if [ "{{.LOCAL}}" = "1" ]; then
-                        echo "../../tfvars/common-{{.VENUE}}.tfvars"
-                    elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/web-analytics/common.tfvars"
-                    else
-                        echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
-                        exit 1
-                    fi
-            TFVARS_MODULE:
-                sh: |
-                    if [ "{{.LOCAL}}" = "1" ]; then
-                        echo "tfvars/{{.VENUE}}.tfvars"
-                    elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/web-analytics/iam-policies.tfvars"
-                    else
-                        echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
-                        exit 1
-                    fi
+            TFVARS_COMMON: "../tfvars/common-{{.VENUE}}.tfvars"
+            TFVARS_MODULE: "tfvars/{{.VENUE}}.tfvars"
         cmds:
             - terraform apply -destroy -var-file={{.TFVARS_COMMON}} -var-file={{.TFVARS_MODULE}} {{.CLI_ARGS}}
 
     iam:refresh:
         desc: "Refresh IAM policies module Terraform state"
         deps: ["iam:init"]
-        dir: iam/policies
+        dir: iam
         requires:
             vars:
                 - name: VENUE
                   enum: [dev, test, prod]
         vars:
-            TFVARS_COMMON:
-                sh: |
-                    if [ "{{.LOCAL}}" = "1" ]; then
-                        echo "../../tfvars/common-{{.VENUE}}.tfvars"
-                    elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/web-analytics/common.tfvars"
-                    else
-                        echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
-                        exit 1
-                    fi
-            TFVARS_MODULE:
-                sh: |
-                    if [ "{{.LOCAL}}" = "1" ]; then
-                        echo "tfvars/{{.VENUE}}.tfvars"
-                    elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/web-analytics/iam-policies.tfvars"
-                    else
-                        echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
-                        exit 1
-                    fi
+            TFVARS_COMMON: "../tfvars/common-{{.VENUE}}.tfvars"
+            TFVARS_MODULE: "tfvars/{{.VENUE}}.tfvars"
         cmds:
             - terraform plan -refresh-only -var-file={{.TFVARS_COMMON}} -var-file={{.TFVARS_MODULE}} {{.CLI_ARGS}}
 
     iam:sync:
         desc: "Apply refresh-only to sync IAM state without changing infrastructure"
         deps: ["iam:init"]
-        dir: iam/policies
+        dir: iam
         requires:
             vars:
                 - name: VENUE
                   enum: [dev, test, prod]
         vars:
-            TFVARS_COMMON:
-                sh: |
-                    if [ "{{.LOCAL}}" = "1" ]; then
-                        echo "../../tfvars/common-{{.VENUE}}.tfvars"
-                    elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/web-analytics/common.tfvars"
-                    else
-                        echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
-                        exit 1
-                    fi
-            TFVARS_MODULE:
-                sh: |
-                    if [ "{{.LOCAL}}" = "1" ]; then
-                        echo "tfvars/{{.VENUE}}.tfvars"
-                    elif [ -n "$CDS_INFRA_DEPLOY_DIR" ]; then
-                        echo "$CDS_INFRA_DEPLOY_DIR/venues/{{.VENUE}}/web-analytics/iam-policies.tfvars"
-                    else
-                        echo "Set CDS_INFRA_DEPLOY_DIR (path to a cds-infra-deploy checkout) or pass LOCAL=1 to use this repo's local tfvars/ dir." >&2
-                        exit 1
-                    fi
+            TFVARS_COMMON: "../tfvars/common-{{.VENUE}}.tfvars"
+            TFVARS_MODULE: "tfvars/{{.VENUE}}.tfvars"
         cmds:
             - terraform apply -refresh-only -var-file={{.TFVARS_COMMON}} -var-file={{.TFVARS_MODULE}} {{.CLI_ARGS}}
 

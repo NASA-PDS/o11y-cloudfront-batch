@@ -13,7 +13,7 @@ from unittest.mock import Mock
 from unittest.mock import patch
 
 from box import Box
-from pds.web_analytics.s3_sync import S3Sync
+from pds.o11y_batch.s3_sync import S3Sync
 
 
 class TestS3Sync(unittest.TestCase):
@@ -191,7 +191,7 @@ class TestS3Sync(unittest.TestCase):
         with patch("boto3.client"):
             s3_sync = S3Sync({}, "/test", "bucket", "logs", enable_gzip=True)
 
-            with patch("pds.web_analytics.s3_sync.logger"):
+            with patch("pds.o11y_batch.s3_sync.logger"):
                 s3_sync.ensure_files_are_gzipped(test_dir)
 
             # Check that plain text files were gzipped
@@ -218,7 +218,7 @@ class TestS3Sync(unittest.TestCase):
         with patch("boto3.client"):
             s3_sync = S3Sync({}, "/test", "bucket", "logs", enable_gzip=False)
 
-            with patch("pds.web_analytics.s3_sync.logger") as mock_logger:
+            with patch("pds.o11y_batch.s3_sync.logger") as mock_logger:
                 s3_sync.ensure_files_are_gzipped(test_dir)
 
             # Check that the file was not gzipped
@@ -273,7 +273,7 @@ class TestS3Sync(unittest.TestCase):
 
             s3_sync = S3Sync({}, "/test", "bucket", "logs")
 
-            with patch("pds.web_analytics.s3_sync.logger") as mock_logger:
+            with patch("pds.o11y_batch.s3_sync.logger") as mock_logger:
                 result = s3_sync.upload_file("/path/to/file.txt", "logs/file.txt")
                 self.assertFalse(result)
                 mock_logger.error.assert_called()
@@ -356,7 +356,7 @@ class TestS3Sync(unittest.TestCase):
         s3_sync = S3Sync({}, "/test", "test-bucket", "logs")
 
         # Test that method returns False when other exception occurs
-        with patch("pds.web_analytics.s3_sync.logger") as mock_logger:
+        with patch("pds.o11y_batch.s3_sync.logger") as mock_logger:
             result = s3_sync.file_exists_in_s3("test/file.txt")
             self.assertFalse(result)
 
@@ -393,7 +393,7 @@ class TestS3Sync(unittest.TestCase):
 
         s3_sync = S3Sync({}, "/test", "bucket", "logs", enable_gzip=False)
 
-        with patch("pds.web_analytics.s3_sync.logger"):
+        with patch("pds.o11y_batch.s3_sync.logger"):
             s3_sync.sync_directory(path_tuple)
 
         # Check that upload was called
@@ -415,7 +415,7 @@ class TestS3Sync(unittest.TestCase):
         with patch("boto3.client"):
             s3_sync = S3Sync({}, "/test", "bucket", "logs", enable_gzip=False)
 
-            with patch("pds.web_analytics.s3_sync.logger"):
+            with patch("pds.o11y_batch.s3_sync.logger"):
                 s3_sync.sync_directory(path_tuple)
 
             # Check that no upload was called
@@ -441,7 +441,7 @@ class TestS3Sync(unittest.TestCase):
         with patch("boto3.client"):
             s3_sync = S3Sync({}, "/test", "bucket", "logs", enable_gzip=False)
 
-            with patch("pds.web_analytics.s3_sync.logger"):
+            with patch("pds.o11y_batch.s3_sync.logger"):
                 s3_sync.sync_directory(path_tuple)
 
             # Check that the file was not gzipped
@@ -455,7 +455,7 @@ class TestS3Sync(unittest.TestCase):
 
             # Mock time.monotonic to return a fixed value
             with patch("time.monotonic", return_value=100.0):
-                with patch("pds.web_analytics.s3_sync.logger") as mock_logger:
+                with patch("pds.o11y_batch.s3_sync.logger") as mock_logger:
                     # Use the correct format that the method expects
                     s3_sync.process_progress("upload: 1024.0 1024.0/2048.0 MiB 50% 2.5 MiB/s", "/test/path", 99.0)
                     mock_logger.info.assert_called_once()
@@ -624,7 +624,7 @@ subdirs:
         mock_run.return_value.returncode = 0
 
         # Import the function
-        from pds.web_analytics.s3_sync import load_config_with_env_vars
+        from pds.o11y_batch.s3_sync import load_config_with_env_vars
 
         # Call the function
         result = load_config_with_env_vars(self.config_path)
@@ -653,7 +653,7 @@ subdirs:
         # Mock FileNotFoundError
         mock_run.side_effect = FileNotFoundError("envsubst: command not found")
 
-        from pds.web_analytics.s3_sync import load_config_with_env_vars
+        from pds.o11y_batch.s3_sync import load_config_with_env_vars
 
         with self.assertRaises(FileNotFoundError):
             load_config_with_env_vars(self.config_path)
@@ -669,7 +669,7 @@ subdirs:
             returncode=1, cmd=["envsubst"], stderr="Invalid variable reference"
         )
 
-        from pds.web_analytics.s3_sync import load_config_with_env_vars
+        from pds.o11y_batch.s3_sync import load_config_with_env_vars
 
         with self.assertRaises(subprocess.CalledProcessError):
             load_config_with_env_vars(self.config_path)
@@ -684,7 +684,7 @@ subdirs:
         mock_run.return_value.stdout = "invalid: yaml: content: ["
         mock_run.return_value.returncode = 0
 
-        from pds.web_analytics.s3_sync import load_config_with_env_vars
+        from pds.o11y_batch.s3_sync import load_config_with_env_vars
 
         with self.assertRaises(Exception):  # yaml.safe_load will raise an exception
             load_config_with_env_vars(self.config_path)
@@ -698,7 +698,7 @@ subdirs:
         mock_run.return_value.stdout = ""
         mock_run.return_value.returncode = 0
 
-        from pds.web_analytics.s3_sync import load_config_with_env_vars
+        from pds.o11y_batch.s3_sync import load_config_with_env_vars
 
         result = load_config_with_env_vars(self.config_path)
         # Should return an empty Box instead of None
@@ -729,7 +729,7 @@ subdirs:
 """
         mock_run.return_value.returncode = 0
 
-        from pds.web_analytics.s3_sync import load_config_with_env_vars
+        from pds.o11y_batch.s3_sync import load_config_with_env_vars
 
         result = load_config_with_env_vars(self.config_path)
 
@@ -741,7 +741,7 @@ subdirs:
 
     def test_load_config_with_env_vars_file_not_found(self):
         """Test handling when config file does not exist."""
-        from pds.web_analytics.s3_sync import load_config_with_env_vars
+        from pds.o11y_batch.s3_sync import load_config_with_env_vars
 
         with self.assertRaises(FileNotFoundError):
             load_config_with_env_vars("/nonexistent/config.yaml")
@@ -769,7 +769,7 @@ class TestParseArgs(unittest.TestCase):
         # Set AWS_PROFILE environment variable
         os.environ["AWS_PROFILE"] = "test-profile"
 
-        from pds.web_analytics.s3_sync import parse_args
+        from pds.o11y_batch.s3_sync import parse_args
 
         args = parse_args()
 
@@ -784,7 +784,7 @@ class TestParseArgs(unittest.TestCase):
         # Set AWS_PROFILE environment variable
         os.environ["AWS_PROFILE"] = "env-profile"
 
-        from pds.web_analytics.s3_sync import parse_args
+        from pds.o11y_batch.s3_sync import parse_args
 
         args = parse_args()
 
@@ -800,7 +800,7 @@ class TestParseArgs(unittest.TestCase):
         if "AWS_PROFILE" in os.environ:
             del os.environ["AWS_PROFILE"]
 
-        from pds.web_analytics.s3_sync import parse_args
+        from pds.o11y_batch.s3_sync import parse_args
 
         with self.assertRaises(SystemExit):
             parse_args()
@@ -811,7 +811,7 @@ class TestParseArgs(unittest.TestCase):
         # Set AWS_PROFILE environment variable
         os.environ["AWS_PROFILE"] = "test-profile"
 
-        from pds.web_analytics.s3_sync import parse_args
+        from pds.o11y_batch.s3_sync import parse_args
 
         args = parse_args()
 

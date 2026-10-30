@@ -1,13 +1,11 @@
 # Shared values passed to all modules — copy to common-<venue>.tfvars and fill in values.
-# Module-specific variables (s3_bucket_prefix, logs_s3_bucket_name, s3_cf_bucket_name)
+# Module-specific variables (s3_bucket_prefix, logs_s3_bucket_name)
 # live in each module's own tfvars directory.
 
 aws_region = "us-west-2"
 tenant     = "en"
-component  = "web-analytics"
+component  = "o11y-cloudfront-batch"
 cicd       = "terraform"
 managedby  = "<your-email>"
 
-partition       = "aws"
-resource_prefix = ""  # prefix for IAM policy names (e.g. pds-dev); no CI/CD identifiers
-ec2_role_name   = ""  # name of the EC2 IAM instance role
+partition = "aws"

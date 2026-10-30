@@ -1,25 +1,27 @@
 # ---------------------------------------------------------------------------
 # Logstash EC2 instance
 # ---------------------------------------------------------------------------
-# AMI: Amazon Linux 2023 (owner 794625662971), consistent with
-# the pattern used in pds-tf-modules/terraform/modules/ec2/main.tf.
-# Logstash is installed directly via RPM (not Docker).
+# AMI: PDS Cloud Oracle Linux 9 image (key-user pdsops pre-provisioned).
+# Logstash is installed via RPM (not Docker) — baked into userdata so no
+# manual root step is needed after first boot.
 #
-# Access: AWS Systems Manager (MCP-SSM-CloudWatch instance profile).
-# No SSH key or inbound security group rules needed.
-#
-# Reads s3_bucket_name from SSM (/pds/web-analytics/s3/bucket_name) so this
-# module can be applied independently of the S3 root module.
+# Access: SSH through the CDS bastion host with a NASA ID, then
+# `sudo -iu pdsops`. The bastion target security group (var.bastion_target_sg_ssm_path) is required.
+# SSM Session Manager is limited to system administrators (and to dev for
+# developers); the instance profile carries the SSM agent permissions.
+# Instance role is managed separately in terraform/iam/ and its
+# profile name is read from SSM at /pds/<component>/iam/roles/ec2/instance-profile-name
+# (published by the iam module after apply).
 #
 # EC2 creation is optional (var.manage_ec2_instance, default true) — set to
-# false to point this module at an existing, externally-managed EC2 (e.g.
-# production reusing an instance that predates this module). In that mode,
-# only the SSM Run-As session document and the SSM parameter outputs are
-# managed; var.existing_instance_id is published in place of a created
-# instance's ID. See terraform/logstash/README.md "Using an existing EC2"
-# for the manual setup steps (logstash-bootstrap.sh + logstash-deploy.sh).
+# false to point this module at an existing, externally-managed EC2 (e.g. an
+# instance that predates this module). In that mode,
+# only the SSM parameter outputs are managed; var.existing_instance_id is
+# published in place of a created instance's ID. See
+# terraform/logstash/README.md "Using an existing EC2" for the manual setup
+# steps (logstash-bootstrap.sh + logstash-deploy.sh).
 #
-# All data sources (SSM parameters, AMI/SG/subnet lookups) live in data.tf.
+# All data sources (SSM parameters, SG/subnet lookups) live in data.tf.
 
 locals {
   ec2_name = "pds-${var.component}"
@@ -33,116 +35,87 @@ locals {
   }
 }
 
-resource "aws_launch_template" "logstash" {
+# Security group for the Logstash EC2. It has no inbound rules of its own (SSH
+# ingress comes from the bastion target SG). Outbound is open so the instance can
+# reach the SSM agent endpoints, DynamoDB (the AMI's SSH key lookup), package
+# repositories, S3 and OpenSearch. The SG ID is published to SSM
+# (outputs.tf) so o11y-platform's OpenSearch module can allow HTTPS from it.
+resource "aws_security_group" "logstash" {
   count = var.manage_ec2_instance ? 1 : 0
 
-  name_prefix   = "${local.ec2_name}-"
-  image_id      = data.aws_ami.mcp_amazon_linux[0].id
-  instance_type = var.logstash_instance_type
+  name        = "${local.ec2_name}-sg"
+  description = "Logstash EC2 - outbound access (SSM, DynamoDB SSH auth, S3, OpenSearch, package repos)"
+  vpc_id      = var.vpc_id
 
-  network_interfaces {
-    associate_public_ip_address = false
-    subnet_id                   = sort(data.aws_subnets.private[0].ids)[0]
-    security_groups             = [data.aws_security_group.mcp_ec2[0].id]
-  }
-
-  iam_instance_profile {
-    name = var.ec2_role_name
-  }
-
-  block_device_mappings {
-    device_name = "/dev/xvda"
-    ebs {
-      volume_size           = 30
-      volume_type           = "gp3"
-      encrypted             = true
-      delete_on_termination = false
-    }
-  }
-
-  user_data = base64encode(templatefile("${path.module}/../templates/logstash-userdata.sh.tpl", {
-    logstash_version    = var.logstash_version
-    repo_branch         = var.repo_branch
-    aws_region          = var.aws_region
-    s3_bucket_name      = data.aws_ssm_parameter.s3_bucket_name.value
-    opensearch_endpoint = data.aws_ssm_parameter.opensearch_endpoint.value
-    index_prefix        = var.resource_prefix
-    s3_cf_bucket_name   = var.s3_cf_bucket_name
-  }))
-
-  tag_specifications {
-    resource_type = "instance"
-    tags          = local.logstash_tags
-  }
-
-  tag_specifications {
-    resource_type = "volume"
-    tags          = local.logstash_tags
-  }
-
-  tags = local.logstash_tags
+  tags = merge(local.logstash_tags, { Name = "${local.ec2_name}-sg" })
 }
 
-resource "aws_instance" "logstash" {
+resource "aws_vpc_security_group_egress_rule" "logstash_all_outbound" {
   count = var.manage_ec2_instance ? 1 : 0
 
-  launch_template {
-    id      = aws_launch_template.logstash[0].id
-    version = "$Latest"
-  }
+  security_group_id = aws_security_group.logstash[0].id
+  description       = "Allow all outbound"
+  ip_protocol       = "-1"
+  cidr_ipv4         = "0.0.0.0/0"
+}
 
-  tags = local.logstash_tags
+module "ec2" {
+  source = "git@github.com:NASA-PDS/pdc-tf-modules.git//terraform/modules/ec2?ref=v1.0.0"
+  count  = var.manage_ec2_instance ? 1 : 0
 
-  lifecycle {
-    # Cloud automation stamps Audit, CreatedBy, CreationTime on launch — ignore to avoid stripping compliance tags.
-    # user_data is managed via launch template; ignore the value stored on the instance itself.
-    ignore_changes = [tags["Audit"], tags["CreatedBy"], tags["CreationTime"], user_data]
+  ami_id                     = var.ami_id
+  instance_profile           = data.aws_ssm_parameter.ec2_instance_profile_name.value
+  bastion_target_sg_ssm_path = var.bastion_target_sg_ssm_path
+
+  # Nothing on the root volume needs to outlive the instance.
+  root_volume_delete_on_termination = true
+
+  ec2_instance_configs = [{
+    instance_name    = local.ec2_name
+    instance_type    = var.logstash_instance_type
+    subnet_id        = sort(data.aws_subnets.private[0].ids)[0]
+    security_groups  = [aws_security_group.logstash[0].id]
+    root_volume_size = var.logstash_root_volume_size
+    root_volume_type = "gp3"
+    user_data = base64encode(templatefile("${path.module}/../templates/logstash-userdata.sh.tpl", {
+      logstash_version = var.logstash_version
+    }))
+    # Userdata runs only at first boot, so a change must replace the instance.
+    user_data_replace_on_change = true
+  }]
+
+  required_tags = {
+    tenant    = var.tenant
+    venue     = var.venue
+    component = var.component
+    managedby = var.managedby
+    cicd      = var.cicd
   }
 }
 
 
 # ---------------------------------------------------------------------------
-# SSM Run-As session document
+# DNS - A record in the existing hosted zone (published by the account
+# baseline at /pds/hosted-zone/name), the same zone as the bastion host. The
+# record name matches the ec2 Name tag, so the SSH target and instance name
+# are the same. Only created when this module manages the EC2
+# (manage_ec2_instance = true).
 # ---------------------------------------------------------------------------
-# Lets `aws ssm start-session --document-name <this>` land directly as the
-# `logstash` OS user instead of root/ssm-user, so operators never need sudo
-# for logstash execution, logging, monitoring, or config (git) updates —
-# `scripts/logstash-deploy.sh` runs entirely under this account.
-#
-# Deliberately a distinct document name (not the account-wide default
-# `SSM-SessionManagerRunShell`), invoked explicitly via --document-name, so
-# it can't collide with anything managed centrally for other instances.
-#
-# Note: granting operators `ssm:StartSession` on this document's ARN (in
-# addition to the instance ARN) is an IAM/SSO concern owned outside this
-# repo — this module only manages the EC2 instance role, not human roles.
-resource "aws_ssm_document" "logstash_runas" {
-  name            = "${local.ec2_name}-runas-logstash"
-  document_type   = "Session"
-  document_format = "JSON"
+data "aws_ssm_parameter" "hosted_zone_name" {
+  count = var.manage_ec2_instance ? 1 : 0
+  name  = "/pds/hosted-zone/name"
+}
 
-  content = jsonencode({
-    schemaVersion = "1.0"
-    description   = "SSM session landing directly as the logstash service user (no sudo)."
-    sessionType   = "Standard_Stream"
-    inputs = {
-      s3BucketName                = ""
-      s3KeyPrefix                 = ""
-      s3EncryptionEnabled         = true
-      cloudWatchLogGroupName      = ""
-      cloudWatchEncryptionEnabled = true
-      cloudWatchStreamingEnabled  = false
-      kmsKeyId                    = ""
-      runAsEnabled                = true
-      runAsDefaultUser            = "logstash"
-      idleSessionTimeout          = "20"
-      maxSessionDuration          = ""
-      shellProfile = {
-        windows = ""
-        linux   = "cd /opt/web-analytics && export XDG_RUNTIME_DIR=\"/run/user/$(id -u)\""
-      }
-    }
-  })
+data "aws_route53_zone" "main" {
+  count = var.manage_ec2_instance ? 1 : 0
+  name  = data.aws_ssm_parameter.hosted_zone_name[0].value
+}
 
-  tags = local.logstash_tags
+resource "aws_route53_record" "logstash" {
+  count   = var.manage_ec2_instance ? 1 : 0
+  zone_id = data.aws_route53_zone.main[0].zone_id
+  name    = local.ec2_name
+  type    = "A"
+  ttl     = 30
+  records = [module.ec2[0].private_ips[local.ec2_name]]
 }

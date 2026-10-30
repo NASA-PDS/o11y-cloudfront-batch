@@ -1,7 +1,7 @@
 # S3 root-module dev values — copy to dev.tfvars and fill in values.
-# Shared values (aws_region, partition, resource_prefix, etc.) are in common-dev.tfvars.
+# Shared values (aws_region, partition, etc.) are in common-dev.tfvars.
 
 venue     = "dev"
 managedby = "<your-email>"
 
-s3_bucket_prefix = ""  # S3 bucket name — may include CI/CD identifiers (e.g. pds-dev-gh01dc)
+s3_bucket_prefix = ""  # bucket is named <prefix>-web-analytics; e.g. pds-dev

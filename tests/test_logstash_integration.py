@@ -41,7 +41,7 @@ class TestLogstashIntegration(unittest.TestCase):
             "template_errors": 0,
             "empty_user_agents": 1,
             "duplicate_sources": 0,
-            "processed_logs": 25,  # +2 for url-field-parsing test lines (10.99.1.1, 10.99.1.2)
+            "processed_logs": 29,  # +2 url-field-parsing lines (10.99.1.1, 10.99.1.2), +1 cache-buster (91.107.144.23), +2 GEO IIS lines with time-taken "-"
             "corrupt_logs": 3,
         },
         "ftp": {
@@ -52,7 +52,9 @@ class TestLogstashIntegration(unittest.TestCase):
             "empty_user_agents": 0,
             "duplicate_sources": 0,
             "processed_logs": 16,
-            "corrupt_logs": 6,
+            # 6 deliberately invalid lines + the truncated IIS FTP fragment ("elClosed"); the IIS data-channel
+            # lines (sc-status "-") parse and are dropped as non-RETR commands
+            "corrupt_logs": 7,
         },
         "cloudfront": {
             "parse_failures": 0,
@@ -498,6 +500,13 @@ class TestLogstashIntegration(unittest.TestCase):
         self.assertIn("target=lucy", query_parts, "url.query_parts must contain 'target=lucy'")
         self.assertIn("version=2", query_parts, "url.query_parts must contain 'version=2'")
 
+        # ── Test 1b: "_" cache-buster key must survive sanitizing as a non-empty key ──
+        cache_events = by_source.get("91.107.144.23", [])
+        self.assertEqual(len(cache_events), 1, "Expected 1 processed event for 91.107.144.23")
+        cache_params = cache_events[0].get("url", {}).get("query_params", {})
+        self.assertNotIn("", cache_params, "url.query_params must not contain an empty field name")
+        self.assertEqual(cache_params.get("_"), "1706077556736", "url.query_params._ must hold the cache-buster")
+
         # ── Test 2: path only, no query string ───────────────────────────────
         no_query_events = by_source.get("10.99.1.2", [])
         self.assertEqual(len(no_query_events), 1, "Expected 1 processed event for 10.99.1.2")
@@ -506,6 +515,29 @@ class TestLogstashIntegration(unittest.TestCase):
         self.assertIn("LUCY", url2.get("path_parts", []), "url.path_parts must contain 'LUCY'")
         self.assertNotIn("query_params", url2, "url.query_params must not be set when there is no query string")
         self.assertNotIn("query_parts", url2, "url.query_parts must not be set when there is no query string")
+
+    def validate_iis_referer_parsing(self, output_dir: Path):
+        """Verify the cs(Referer) column in GEO IIS lines is not absorbed into user_agent.original."""
+        events = self.load_processed_events(output_dir)
+        by_source = {e.get("source", {}).get("address"): e for e in events}
+        expected_referrers = {
+            "91.199.87.198": None,
+            "54.250.58.217": None,
+            "54.250.58.218": "https://example.org/search?q=lro",
+        }
+        for address, referrer in expected_referrers.items():
+            self.assertIn(address, by_source, f"Expected a processed GEO IIS event for {address}")
+            event = by_source[address]
+            self.assertEqual(
+                event.get("user_agent", {}).get("original"),
+                "Mozilla/5.0+(Windows+NT+10.0;+Win64;+x64)",
+                "user_agent.original must not include the referer column",
+            )
+            self.assertEqual(
+                event.get("http", {}).get("request", {}).get("referrer"),
+                referrer,
+                "http.request.referrer must hold the referer, and be unset when it is '-'",
+            )
 
     def test_https_log_processing(self):
         """Test processing of HTTPS logs."""
@@ -521,6 +553,9 @@ class TestLogstashIntegration(unittest.TestCase):
 
         # Validate URL field parsing (path_parts, query_params, query_parts)
         self.validate_url_field_parsing(output_dir)
+
+        # Validate the referer column of GEO IIS lines
+        self.validate_iis_referer_parsing(output_dir)
 
     def test_ftp_log_processing(self):
         """Test processing of FTP logs."""

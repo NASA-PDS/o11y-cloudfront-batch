@@ -1,7 +1,7 @@
 # Root-module prod values — module-specific only.
-# Shared values (aws_region, partition, resource_prefix, etc.) are in common-prod.tfvars.
+# Shared values (aws_region, partition, etc.) are in common-prod.tfvars.
 
 venue     = "prod"
 managedby = "<your-email>"
 
-s3_bucket_prefix = ""  # S3 bucket name — no CI/CD identifiers in prod (e.g. pds-prod-logs)
+s3_bucket_prefix = ""  # bucket is named <prefix>-web-analytics; e.g. pds-prod

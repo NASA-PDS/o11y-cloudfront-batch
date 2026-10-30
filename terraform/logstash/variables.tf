@@ -4,12 +4,6 @@ variable "aws_region" {
   default     = "us-west-2"
 }
 
-variable "partition" {
-  description = "AWS partition (aws, aws-us-gov, aws-cn)"
-  type        = string
-  default     = "aws"
-}
-
 variable "tenant" {
   description = "Tag value for Tenant"
   type        = string
@@ -35,38 +29,22 @@ variable "managedby" {
   type        = string
 }
 
-variable "resource_prefix" {
-  description = "Prefix for all resources (e.g. pds-dev). No CI/CD pipeline identifiers."
-  type        = string
-}
-
-variable "ec2_role_name" {
-  description = "Existing PDS EC2 IAM role name (used as instance profile)"
-  type        = string
-}
-
 variable "manage_ec2_instance" {
-  description = "Whether this module creates the Logstash EC2 (launch template + instance). Set to false to reuse an existing, externally-managed EC2 (e.g. production) — see existing_instance_id and terraform/logstash/README.md 'Using an existing EC2'."
+  description = "Whether this module creates the Logstash EC2 instance. Set to false to reuse an existing, externally-managed EC2 - see existing_instance_id and terraform/logstash/README.md 'Using an existing EC2'."
   type        = bool
   default     = true
 }
 
 variable "existing_instance_id" {
-  description = "Instance ID of an existing EC2 to publish as /pds/web-analytics/ec2/logstash_instance_id. Required when manage_ec2_instance = false; ignored otherwise."
+  description = "Instance ID of an existing EC2 to publish as /pds/o11y-cloudfront-batch/ec2/logstash_instance_id. Required when manage_ec2_instance = false; ignored otherwise."
   type        = string
   default     = ""
 }
 
 variable "vpc_id" {
-  description = "VPC ID for the Logstash EC2 and security group lookup. Required when manage_ec2_instance = true. TODO: replace with SSM data source under /pds/cds-infra/vpc/id once published."
+  description = "VPC ID for the Logstash EC2, its security group, and the private subnet lookup. Required when manage_ec2_instance = true. TODO: replace with SSM data source under /pds/cds-infra/vpc/id once published."
   type        = string
   sensitive   = true
-  default     = ""
-}
-
-variable "ec2_security_group_name" {
-  description = "Name of the EC2 security group to attach to the Logstash instance. Required when manage_ec2_instance = true. TODO: replace with SSM lookup under /pds/cds-infra/vpc/security_groups/ once published."
-  type        = string
   default     = ""
 }
 
@@ -76,26 +54,31 @@ variable "logstash_instance_type" {
   default     = "t3.large"
 }
 
+variable "logstash_root_volume_size" {
+  description = "Root volume size in GB for the Logstash instance. Must be >= the AMI root snapshot size (32 GB)."
+  type        = number
+  default     = 50
+}
+
 variable "logstash_version" {
   description = "Logstash RPM version to install"
   type        = string
-  default     = "8.18.0"
+  default     = "8.19.23"
 }
 
-variable "s3_cf_bucket_name" {
-  description = "Name of the S3 bucket containing CloudFront access logs (EN node only). Leave empty to skip."
+variable "ami_id" {
+  description = "AMI ID for the Logstash EC2 instance. Required when manage_ec2_instance = true."
   type        = string
   default     = ""
 }
 
-variable "mcp_ami_owner_id" {
-  description = "AWS account ID that owns the Amazon Linux 2023 AMIs used for the Logstash instance. Required when manage_ec2_instance = true."
+variable "bastion_target_sg_ssm_path" {
+  description = "SSM parameter path for the bastion target SG ID. The SG is attached to the Logstash EC2 so it accepts SSH from the bastion. Required when manage_ec2_instance = true; ignored otherwise (an existing EC2 must already accept SSH from the bastion)."
   type        = string
   default     = ""
-}
 
-variable "repo_branch" {
-  description = "Branch of the web-analytics repo to clone at EC2 first boot."
-  type        = string
-  default     = "main"
+  validation {
+    condition     = !var.manage_ec2_instance || length(var.bastion_target_sg_ssm_path) > 0
+    error_message = "bastion_target_sg_ssm_path must be set when manage_ec2_instance = true."
+  }
 }

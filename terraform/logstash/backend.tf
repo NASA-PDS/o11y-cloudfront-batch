@@ -6,6 +6,6 @@
 
 terraform {
   backend "s3" {
-    key = "web-analytics/logstash.tfstate"
+    key = "o11y-cloudfront-batch/logstash.tfstate"
   }
 }

@@ -4,12 +4,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-PDS Web Analytics is a system that processes web access logs from multiple NASA Planetary Data System (PDS) nodes. It ingests logs from S3, processes them through Logstash pipelines, and stores structured data in OpenSearch for analysis. The system supports multiple log formats (Apache, IIS, FTP, Tomcat) and structures all data according to Elastic Common Schema (ECS) v8.
+PDS Web Analytics processes web access logs from multiple NASA Planetary Data System (PDS) nodes. It ingests logs from S3, processes them through Logstash pipelines, and stores structured data in OpenSearch. Supported formats: Apache, IIS, FTP, Tomcat, and CloudFront (JSON and W3C). All data is structured as Elastic Common Schema (ECS) v8.
 
 **Key Components:**
-- **S3 Sync Tool**: Python package that uploads local log files to S3 with optional gzip compression (uses boto3)
 - **Logstash Pipelines**: Per-node pipelines that read from S3, parse logs, enrich data, and output to OpenSearch
 - **Configuration System**: Template-based configuration using environment variable substitution via envsubst
+- **S3 Sync Tool** (deprecated): Python package that uploads local log files to S3 with optional gzip compression (boto3). Nodes now upload with Data Upload Manager.
+
+Documentation has one home per topic (see the README documentation map). Do not duplicate runbook content in this file.
 
 ## Pre-Push Requirements
 
@@ -40,7 +42,7 @@ pre-commit install -t commit-msg
 
 ### Testing
 ```bash
-# Run all tests
+# Run all Python unit tests
 pytest
 
 # Run specific test file
@@ -49,8 +51,8 @@ pytest tests/test_s3_sync.py -v
 # Run with coverage
 pytest --cov=pds -v
 
-# Run integration tests
-python -m unittest tests.test_logstash_integration
+# Run the Logstash pipeline integration tests (needs Docker)
+docker compose run --rm test
 
 # Run tests using tox (multiple Python versions)
 tox
@@ -86,7 +88,7 @@ sphinx-build -b html docs/source docs/build/html
 
 ## Architecture
 
-### S3 Sync Module (`src/pds/web_analytics/s3_sync.py`)
+### S3 Sync Module (`src/pds/o11y_batch/s3_sync.py`)
 
 The `S3Sync` class handles uploading log files from local directories to S3:
 
@@ -107,19 +109,20 @@ The Logstash configuration uses a **modular template system**:
    - Uses envsubst to substitute environment variables in `pipelines.yml.template`
 
 2. **Configuration Structure**:
-   - `inputs/`: S3 input configurations (per-node, defines bucket prefix, organization name, domain)
+   - `inputs/`: S3 input configurations (per-node, defines bucket prefixes, organization name, domain, dataset)
    - `shared/pds-filter.conf`: Main processing pipeline (grok parsing, field mapping, enrichment)
-   - `shared/pds-output-opensearch.conf`: OpenSearch output configuration
-   - `pipelines.yml.template`: Pipeline definitions with environment variables
+   - `shared/pds-output-opensearch.conf`: OpenSearch output and bad-log routing
+   - `pipelines.yml.template`: Pipeline definitions (EN overrides workers and batch size)
 
 3. **Per-Node Pipelines**: Each PDS node (ATM, EN, GEO, IMG, NAIF, PPI, RINGS, SBN) gets its own Logstash pipeline that runs independently
 
-4. **Data Flow**: S3 bucket → Logstash S3 input → Grok parsing → ECS field mapping → GeoIP/DNS enrichment → OpenSearch
+4. **Data Flow**: S3 buckets (node logs; CloudFront logs for EN) → Logstash S3 input → Grok parsing → ECS field mapping → GeoIP/DNS enrichment → OpenSearch
 
 ### Configuration System
 
-**Environment Variables** (defined in `.env` file):
-- `S3_BUCKET_NAME`: S3 bucket for log storage
+**Environment Variables** (defined in `.env` file locally, `/etc/logstash/env` on the EC2):
+- `S3_BUCKET_NAME`: node logs bucket
+- `S3_CF_BUCKET_NAME`: CloudFront logs bucket (EN only)
 - `OPENSEARCH_URL`: OpenSearch endpoint URL
 - `INDEX_PREFIX`: Prefix for OpenSearch indices
 - `LS_SETTINGS_DIR`: Path to Logstash config directory
@@ -133,103 +136,44 @@ The Logstash configuration uses a **modular template system**:
 ### Package Structure
 
 This is a Python namespace package under the `pds` namespace:
-- Package name: `pds-web-analytics`
-- Namespace: `pds.web_analytics`
-- Source location: `src/pds/web_analytics/`
-- Version: Read from `src/pds/web_analytics/VERSION.txt`
+- Package name: `pds-o11y-cloudfront-batch`
+- Namespace: `pds.o11y_batch`
+- Source location: `src/pds/o11y_batch/`
+- Version: Read from `src/pds/o11y_batch/VERSION.txt`
 
 ## Important Implementation Details
 
-### Log Format Support
+### Log Formats, ECS Mapping, Bad Logs
 
-The Logstash filter configuration handles multiple formats via conditional grok patterns:
-- Apache Combined format (most common)
-- Microsoft IIS logs
-- FTP transfer logs (xferlog format)
-- Tomcat access logs
+Formats, key ECS fields, and the node table are in the [README](README.md#data-processing). Bad-log routing is in the [Operations Runbook](docs/operations.md#bad-logs): only the tags listed in `shared/pds-output-opensearch.conf` (including `_grok_filter_initial_parse_failure`) are diverted to `/tmp/bad_logs_YYYY-MM.txt`; everything else is indexed. Keep that list in step with the tags `pds-filter.conf` sets.
 
-**Error Handling**: Bad logs are tagged (e.g., `_grok_parse_failure`, `bad_log`) and written to `/tmp/bad_logs_YYYY-MM.txt` via a separate file output.
-
-### ECS Field Mapping
-
-All log data is mapped to ECS v8 schema fields. Key mappings:
-- `[source][address]` ← client IP
-- `[url][path]` ← request path
-- `[url][path_parts]` ← array of path segments split on `/` (e.g. `["pds", "data", "LUCY", "kernels"]`) — filter by mission/instrument anywhere in the path
-- `[url][query_params]` ← key-value object parsed from the query string (e.g. `{"target": "lucy"}`) — filter on a specific param with `url.query_params.target: "lucy"`
-- `[url][query_parts]` ← array of `"key=value"` strings (e.g. `["target=lucy", "version=2"]`) — wildcard search across all params with `url.query_parts: "*lucy*"`
-- `[http][request][method]` ← HTTP method
-- `[http][response][status_code]` ← status code
-- `[organization][name]` ← PDS node identifier (set in input config)
-- `[event][dataset]` ← data source identifier (e.g., "en.http", "naif.ftp")
-
-The OpenSearch index template (`config/opensearch/ecs-8.17-custom-template.json`) must be installed before processing logs.
+The OpenSearch index template (`config/opensearch/ecs-8.17-custom-template.json`) is applied by `logstash-deploy.sh`; see `config/opensearch/README.md`.
 
 ### Testing Strategy
 
-- **Unit tests** (`tests/test_s3_sync.py`): Test S3Sync class methods (gzip detection, pattern matching, boto3 interactions)
-- **Integration tests** (`tests/test_logstash_integration.py`): Test full Logstash pipeline with sample logs
-- **Test data**: Sample logs in `tests/data/logs/` for each supported format
+- **Unit tests**: `tests/test_s3_sync.py`, `tests/test_egress_report.py`, `tests/test_logstash_build_config.py`
+- **Integration tests** (`tests/test_logstash_integration.py`): the shared filter against sample input; (`tests/test_logstash_log_years.py`): the `LOG_YEARS`-built S3 inputs against a fake S3 server; see `tests/README.md`
+- **Test data**: inline `generator` inputs in `tests/config/test-input-*.conf`; CloudFront samples in `tests/data/`
 - **Pytest markers**: `unit`, `integration`, `slow`, `s3`, `cli`, `gzip`, `regression`
 
 ## Common Workflows
 
-### Adding a New PDS Node
+Each task has one home; link to it instead of copying it here.
 
-1. Create new input config in `config/logstash/config/inputs/pds-input-s3-<node>.conf`:
-   - Set S3 bucket prefix
-   - Define `[organization][name]`, `[url][domain]`, `[event][dataset]` fields
-2. Add pipeline entry to `config/logstash/config/pipelines.yml.template`
-3. Update S3 sync config (`config/config.yaml`) to include new log directories
-4. Add test cases with sample logs from the new node
-5. Rebuild configs: `./scripts/logstash_build_config.sh`
+| Task | Where |
+|---|---|
+| Connect to the EC2, first-boot setup, verify | `terraform/logstash/README.md` |
+| Deploy, subset of nodes (`ENABLED_NODES`), re-ingest, monitoring, troubleshooting, deployed file locations | `docs/operations.md` |
+| Add a PDS node | `README.md` ("Adding a PDS node") |
+| Add a log format test | `tests/README.md` |
+| Deployment order, permission tiers, SSM contract | o11y-platform `terraform/README.md` |
 
 ### Modifying Log Processing
 
-- **Parsing changes**: Edit `config/logstash/config/shared/pds-filter.conf`
-- **Output changes**: Edit `config/logstash/config/shared/pds-output-opensearch.conf`
-- **Node-specific inputs**: Edit individual files in `config/logstash/config/inputs/`
-- After changes, rebuild and test: `./scripts/logstash_build_config.sh && logstash -t -f config/logstash/config/pipelines.yml`
-
-### Debugging Failed Log Parsing
-
-1. Check bad logs file: `tail -f /tmp/bad_logs_$(date +%Y-%m).txt`
-2. Look for grok parse failures and tagged errors
-3. Test grok patterns using Logstash's `-t` flag for config validation
-4. Add test cases in `tests/` to prevent regressions
-
-### Connecting to the Logstash EC2 (SSM)
-
-Access is via AWS Systems Manager Session Manager only — no SSH keys, no
-inbound security group rules:
-
-```bash
-aws ssm start-session --target <instance-id>
-```
-
-**This lands as `root`.** Logstash runs as a `systemd --user` service under
-a shared `logstash` account, and day-2 operations (service control, logs,
-config redeploys via `scripts/logstash-deploy.sh`) are meant to run as that
-account with no sudo — but the session does not land there automatically.
-Switch in place immediately after connecting:
-
-```bash
-sudo runuser -l logstash    # or: su - logstash
-cd /opt/web-analytics
-```
-
-A custom SSM Run-As document (`aws_ssm_document.logstash_runas` in
-`terraform/logstash/main.tf`) can make `--document-name <doc>` land
-directly as `logstash`, but it requires an IAM grant
-(`ssm:StartSession` on the document ARN) that may not be provisioned —
-don't assume it works without confirming; the `runuser` switch above is
-the reliable fallback regardless of IAM state.
-
-Once you're `logstash`: `systemctl --user status logstash`,
-`tail -f /var/log/logstash/logstash-plain.log` for logs (`journalctl`
-needs adm/wheel group membership `logstash` doesn't have), `bash
-scripts/logstash-deploy.sh` to redeploy config. Full runbooks:
-`terraform/logstash/README.md` and the root `README.md` Quick Reference.
+- **Parsing**: `config/logstash/config/shared/pds-filter.conf`
+- **Output**: `config/logstash/config/shared/pds-output-opensearch.conf`
+- **Per-node inputs**: `config/logstash/config/inputs/`
+- After changes, rebuild and test: `./scripts/logstash_build_config.sh`, then `docker compose run --rm test`
 
 ## Dependencies
 
@@ -239,7 +183,7 @@ scripts/logstash-deploy.sh` to redeploy config. Full runbooks:
 - **pyyaml**: YAML config parsing
 
 ### External Dependencies
-- **Logstash 8.x**: Log processing engine (requires Java 11+)
+- **Logstash 8.x**: Log processing engine (bundled JDK; no separate Java install)
 - **Logstash plugins**: `logstash-filter-tld`, `logstash-output-opensearch`
 - **envsubst**: Environment variable substitution (from gettext package)
 - **AWS credentials**: For S3 and OpenSearch access
@@ -255,7 +199,7 @@ scripts/logstash-deploy.sh` to redeploy config. Full runbooks:
 
 ## Notes for Development
 
-- The `scripts/s3_log_sync.py` is a legacy script; the actual implementation is in `src/pds/web_analytics/s3_sync.py`
+- The `scripts/s3_log_sync.py` is a legacy script; the actual implementation is in `src/pds/o11y_batch/s3_sync.py`
 - Always run `./scripts/logstash_build_config.sh` after modifying Logstash configs to regenerate pipeline files
 - The system uses `envsubst` for variable substitution in both Python config loading and Logstash config generation
 - AWS profile is required for S3 operations - fails with helpful error if not provided
