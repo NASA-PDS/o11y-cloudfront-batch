@@ -92,30 +92,3 @@ module "ec2" {
     cicd      = var.cicd
   }
 }
-
-
-# ---------------------------------------------------------------------------
-# DNS - A record in the existing hosted zone (published by the account
-# baseline at /pds/hosted-zone/name), the same zone as the bastion host. The
-# record name matches the ec2 Name tag, so the SSH target and instance name
-# are the same. Only created when this module manages the EC2
-# (manage_ec2_instance = true).
-# ---------------------------------------------------------------------------
-data "aws_ssm_parameter" "hosted_zone_name" {
-  count = var.manage_ec2_instance ? 1 : 0
-  name  = "/pds/hosted-zone/name"
-}
-
-data "aws_route53_zone" "main" {
-  count = var.manage_ec2_instance ? 1 : 0
-  name  = data.aws_ssm_parameter.hosted_zone_name[0].value
-}
-
-resource "aws_route53_record" "logstash" {
-  count   = var.manage_ec2_instance ? 1 : 0
-  zone_id = data.aws_route53_zone.main[0].zone_id
-  name    = local.ec2_name
-  type    = "A"
-  ttl     = 30
-  records = [module.ec2[0].private_ips[local.ec2_name]]
-}

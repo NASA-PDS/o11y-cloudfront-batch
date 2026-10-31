@@ -14,7 +14,6 @@ Created only when `manage_ec2_instance = true`, except the instance ID parameter
 
 - `module.ec2` ([pdc-tf-modules](https://github.com/NASA-PDS/pdc-tf-modules) `ec2`): the instance, tagged `Patch = "true"`, in a private subnet, with the bastion target security group attached. Userdata installs Logstash and sets up `pdsops` at first boot. See [Replacing the instance](#replacing-the-instance).
 - `aws_security_group.logstash`: no inbound rules; all outbound allowed (SSM, DynamoDB SSH-key lookup, package repos, S3, OpenSearch). SSH ingress comes from the bastion target security group.
-- `aws_route53_record.logstash`: A record `<Name tag>.<zone>` to the private IP, in the hosted zone named by SSM `/pds/hosted-zone/name` (the bastion's zone).
 - SSM parameters, below.
 
 ## SSM parameters
@@ -24,10 +23,8 @@ Created only when `manage_ec2_instance = true`, except the instance ID parameter
 | `/pds/o11y-cloudfront-batch/s3/bucket_name` | read | `s3` module |
 | `/pds/o11y-platform/opensearch/opensearch_endpoint` | read | o11y-platform `opensearch` |
 | `/pds/o11y-cloudfront-batch/iam/roles/ec2/instance-profile-name` | read | `iam` module |
-| `/pds/hosted-zone/name` | read | account baseline |
 | `bastion_target_sg_ssm_path` (input) | read | pdc-cds-infra [bastion-core](https://github.com/NASA-PDS/pdc-cds-infra/blob/main/terraform/bastion-core/README.md#ssm-parameters-published) |
 | `/pds/o11y-cloudfront-batch/ec2/logstash_instance_id` | published | SSM session target |
-| `/pds/o11y-cloudfront-batch/ec2/logstash_fqdn` | published | SSH target via the bastion |
 | `/pds/o11y-cloudfront-batch/ec2/logstash_security_group_id` | published | o11y-platform `opensearch` (HTTPS ingress) |
 
 Cross-repo parameters are in the [SSM contract](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md#ssm-contract).
@@ -53,39 +50,40 @@ Cross-repo parameters are in the [SSM contract](https://github.com/NASA-PDS/o11y
 | Name | Description |
 |---|---|
 | `logstash_instance_id` | Instance ID. |
-| `logstash_fqdn` | Route53 FQDN; null when `manage_ec2_instance = false`. |
 
 ## Access model
 
 Everyone connects through the CDS bastion: the EC2 has only a private IP. SSH to the bastion with your NASA ID, then to the EC2 with the same ID. The AMI checks it against the user-key store (DynamoDB) on every login, so your key must be enrolled; enrollment and the bastion itself are covered in the pdc-cds-infra [bastion-core README](https://github.com/NASA-PDS/pdc-cds-infra/blob/main/terraform/bastion-core/README.md#connecting-to-the-bastion). Then switch to the shared `pdsops` account, which owns Logstash.
 
 ```bash
-# On your workstation: look up the hostnames.
+# On your workstation: look up the bastion zone and the EC2 private IP.
 NASA_ID="<nasa-id>"
 ZONE=$(aws ssm get-parameter --name /pds/hosted-zone/name \
   --query Parameter.Value --output text)
-FQDN=$(aws ssm get-parameter \
-  --name /pds/o11y-cloudfront-batch/ec2/logstash_fqdn \
+INSTANCE_ID=$(aws ssm get-parameter \
+  --name /pds/o11y-cloudfront-batch/ec2/logstash_instance_id \
   --query Parameter.Value --output text)
-echo "Target: ${FQDN}"
+TARGET=$(aws ec2 describe-instances --instance-ids ${INSTANCE_ID} \
+  --query 'Reservations[0].Instances[0].PrivateIpAddress' --output text)
+echo "Target: ${TARGET}"
 ssh ${NASA_ID}@pds-cds-bastion-core.${ZONE}
 
-# On the bastion: set FQDN to the Target value printed above.
-FQDN="<target-fqdn>"
-ssh ${USER}@${FQDN}
+# On the bastion: set TARGET to the value printed above.
+TARGET="<target-ip>"
+ssh ${USER}@${TARGET}
 sudo -iu pdsops
 ```
 
-`logstash_fqdn` is published only when this module creates the EC2; otherwise use the instance's hostname.
+The private IP changes when the instance is replaced, so look it up each time.
 
 ### Local shortcut
 
-`ProxyJump` in `~/.ssh/config` reaches the EC2 through the bastion in one command. Your workstation key authenticates both hops, so no key or agent forwarding is needed on the bastion, and `scp`, `rsync`, and port forwards work. `~/.ssh/config` is a static file, so this appends the entries with the values substituted when it is written. Set `FQDN` to the target looked up above:
+`ProxyJump` in `~/.ssh/config` reaches the EC2 through the bastion in one command. Your workstation key authenticates both hops, so no key or agent forwarding is needed on the bastion, and `scp`, `rsync`, and port forwards work. `~/.ssh/config` is a static file, so this appends the entries with the values substituted when it is written. Set `TARGET` to the private IP looked up above:
 
 ```bash
 NASA_ID="<nasa-id>"
 BASTION="pds-cds-bastion-core.${ZONE}"
-FQDN="<target-fqdn>"
+TARGET="<target-ip>"
 
 cat >> ~/.ssh/config << EOF
 
@@ -94,7 +92,7 @@ Host cds-bastion
     User ${NASA_ID}
 
 Host cds-logstash
-    HostName ${FQDN}
+    HostName ${TARGET}
     User ${NASA_ID}
     ProxyJump cds-bastion
 EOF
@@ -132,19 +130,19 @@ A userdata change (for example `logstash_version`) replaces the instance (`user_
 
 A replacement:
 
-- gets a new instance ID, IP, and host keys; the Route53 record and SSM parameters follow
+- gets a new instance ID, IP, and host keys; the SSM parameters follow
 - loses the S3 `sincedb`, so logs are re-read. `document_id` is a fingerprint, so documents are overwritten, not duplicated. For a large backlog, deploy with `ENABLED_NODES` ([First-boot setup](#first-boot-setup))
 - deletes the old root volume
 - needs the [First-boot setup](#first-boot-setup) operator steps re-run
 
 ## Using an existing EC2 (`manage_ec2_instance = false`)
 
-Set `manage_ec2_instance = false` and `existing_instance_id` in the venue inputs. `task apply` then only publishes `logstash_instance_id`; it never changes the EC2, and `logstash_fqdn` and `logstash_security_group_id` are not published.
+Set `manage_ec2_instance = false` and `existing_instance_id` in the venue inputs. `task apply` then only publishes `logstash_instance_id`; it never changes the EC2, and `logstash_security_group_id` is not published.
 
 Prerequisites on the instance, outside this module's control:
 
 - Oracle Linux 9 (PDS Cloud AMI), or another RPM distro where `dnf`, `systemd --user`, and `loginctl enable-linger` work
-- the bastion target security group attached, operator SSH keys enrolled, and a hostname reachable from the bastion
+- the bastion target security group attached, operator SSH keys enrolled, and an address reachable from the bastion
 - an instance profile with the [`iam`](../iam) module's policy, plus `AmazonSSMManagedInstanceCore`
 - a system administrator to run `scripts/logstash-bootstrap.sh` as root once
 
