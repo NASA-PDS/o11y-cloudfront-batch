@@ -52,6 +52,7 @@ Each topic has one home; other docs link to it.
 | Deploy, subset-of-nodes rollout, monitoring, troubleshooting, tuning | [Operations Runbook](docs/operations.md) |
 | Pipeline integration tests, adding a log format | [`tests/README.md`](tests/README.md) |
 | OpenSearch index template | [`config/opensearch/README.md`](config/opensearch/README.md) |
+| Dashboards export, the archive-path filter and the paths it covers | [`config/opensearch-ui/README.md`](config/opensearch-ui/README.md) |
 | Bastion host, SSH key enrollment | pdc-cds-infra [bastion-core](https://github.com/NASA-PDS/pdc-cds-infra/blob/main/terraform/bastion-core/README.md) |
 | CloudFront distribution and the o11y flags | pdc-cds-infra [`pds-main`](https://github.com/NASA-PDS/pdc-cds-infra/blob/main/terraform/cloudfront/pds-main/README.md#o11y-integration) |
 
