@@ -167,6 +167,9 @@ Each task has one home; link to it instead of copying it here.
 | Add a PDS node | `README.md` ("Adding a PDS node") |
 | Add a log format test | `tests/README.md` |
 | Deployment order, permission tiers, SSM contract | o11y-platform `terraform/README.md` |
+| Actual deployed settings per venue (EC2 instance type, Logstash version, module release pin, OpenSearch sizing) | `cds-infra-deploy` repo (`<workspace>/cds-infra-deploy`), `venues/<venue>/o11y-cloudfront-batch/` and `venues/<venue>/o11y-platform/opensearch/` |
+
+The `terraform/logstash` module in this repo defines the variables and defaults (and `tfvars/`, used for local dev). The values each venue (dev, test, prod) is deployed with come from the Terragrunt files in `cds-infra-deploy`, which pin this module to a release ref. Read those files, not the module defaults, when asked what is deployed or how to size it. Pipeline settings (`pipeline.workers`, batch size, JVM heap) are not in `cds-infra-deploy`; they are in `config/logstash/config/` here.
 
 ### Modifying Log Processing
 
