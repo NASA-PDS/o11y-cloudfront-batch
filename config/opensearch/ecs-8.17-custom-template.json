@@ -77,6 +77,36 @@
             }
           }
         },
+        "aws": {
+          "properties": {
+            "cloudfront": {
+              "properties": {
+                "detailed_result_type": {
+                  "ignore_above": 1024,
+                  "type": "keyword"
+                },
+                "edge_location": {
+                  "ignore_above": 1024,
+                  "type": "keyword"
+                },
+                "response_result_type": {
+                  "ignore_above": 1024,
+                  "type": "keyword"
+                },
+                "result_type": {
+                  "ignore_above": 1024,
+                  "type": "keyword"
+                },
+                "time_taken_ms": {
+                  "type": "float"
+                },
+                "time_to_first_byte_ms": {
+                  "type": "float"
+                }
+              }
+            }
+          }
+        },
         "client": {
           "properties": {
             "address": {
