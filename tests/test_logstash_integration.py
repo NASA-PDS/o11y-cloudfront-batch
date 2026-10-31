@@ -539,6 +539,26 @@ class TestLogstashIntegration(unittest.TestCase):
                 "http.request.referrer must hold the referer, and be unset when it is '-'",
             )
 
+    def validate_cloudfront_cache_fields(self, output_dir: Path, expected: Dict[str, Dict]):
+        """Verify the aws.cloudfront cache and latency fields of processed CloudFront events.
+
+        Args:
+            output_dir: Pipeline output directory.
+            expected: Per source address, the expected edge_location, result_type, response_result_type,
+                detailed_result_type, time_taken_ms and time_to_first_byte_ms.
+        """
+        by_source = {e.get("source", {}).get("address"): e for e in self.load_processed_events(output_dir)}
+        for address, want in expected.items():
+            self.assertIn(address, by_source, f"Expected a processed CloudFront event for {address}")
+            event = by_source[address]
+            cloudfront = event.get("aws", {}).get("cloudfront", {})
+            for name in ("edge_location", "result_type", "response_result_type", "detailed_result_type"):
+                self.assertEqual(cloudfront.get(name), want[name], f"aws.cloudfront.{name} for {address}")
+            for name in ("time_taken_ms", "time_to_first_byte_ms"):
+                self.assertAlmostEqual(cloudfront.get(name), want[name], places=3, msg=f"aws.cloudfront.{name}")
+            self.assertNotIn("duration", event.get("event", {}), "event.duration must not carry CloudFront timings")
+            self.assertEqual(event.get("temp", {}), {}, "CloudFront staging fields must not be left in [temp]")
+
     def test_https_log_processing(self):
         """Test processing of HTTPS logs."""
         if "https" not in self.ENABLED_CONFIGS:
@@ -581,6 +601,29 @@ class TestLogstashIntegration(unittest.TestCase):
         # Validate output counts
         self.validate_output_counts(output_dir, "cloudfront")
 
+        # time-taken (seconds) becomes milliseconds; cache fields come from the trailing columns
+        self.validate_cloudfront_cache_fields(
+            output_dir,
+            {
+                "198.51.100.194": {
+                    "edge_location": "FRA56-P2",
+                    "result_type": "Miss",
+                    "response_result_type": "Miss",
+                    "detailed_result_type": "Miss",
+                    "time_taken_ms": 791.0,
+                    "time_to_first_byte_ms": 784.0,
+                },
+                "203.0.113.42": {
+                    "edge_location": "IAD89-C1",
+                    "result_type": "Error",
+                    "response_result_type": "Error",
+                    "detailed_result_type": "Error",
+                    "time_taken_ms": 123.0,
+                    "time_to_first_byte_ms": 120.0,
+                },
+            },
+        )
+
     def test_cloudfront_json_log_processing(self):
         """Test processing of CloudFront JSON Standard Logging v2 logs."""
         if "cloudfront-json" not in self.ENABLED_CONFIGS:
@@ -592,6 +635,28 @@ class TestLogstashIntegration(unittest.TestCase):
         self.assertTrue(success, "Logstash pipeline failed for CloudFront JSON logs")
 
         self.validate_output_counts(output_dir, "cloudfront-json")
+
+        self.validate_cloudfront_cache_fields(
+            output_dir,
+            {
+                "198.51.100.42": {
+                    "edge_location": "MIA50-P2",
+                    "result_type": "Miss",
+                    "response_result_type": "Miss",
+                    "detailed_result_type": "Miss",
+                    "time_taken_ms": 516.0,
+                    "time_to_first_byte_ms": 516.0,
+                },
+                "203.0.113.50": {
+                    "edge_location": "SIN2-P4",
+                    "result_type": "FunctionGeneratedResponse",
+                    "response_result_type": "FunctionGeneratedResponse",
+                    "detailed_result_type": "FunctionGeneratedResponse",
+                    "time_taken_ms": 1.0,
+                    "time_to_first_byte_ms": 1.0,
+                },
+            },
+        )
 
     @unittest.skip("Skipping configuration file existence test")
     def test_configuration_files_exist(self):

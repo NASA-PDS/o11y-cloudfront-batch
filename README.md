@@ -126,6 +126,9 @@ config/logstash/config/
 | `event.start` | Request timestamp |
 | `organization.name` | Node ID (set by the input) |
 | `event.dataset` | Source, e.g. `en.http`, `naif.ftp` |
+| `aws.cloudfront.result_type`, `.response_result_type`, `.detailed_result_type` | CloudFront cache result, e.g. `Hit`, `Miss`, `Error` (CloudFront events only) |
+| `aws.cloudfront.edge_location` | CloudFront edge location, e.g. `FRA56-P2` (CloudFront events only) |
+| `aws.cloudfront.time_taken_ms`, `.time_to_first_byte_ms` | CloudFront latency in milliseconds; not set when CloudFront records `-` |
 
 **Bad logs:** events with certain failure tags go to `/tmp/bad_logs_YYYY-MM.txt` on the EC2 instead of OpenSearch. See [Bad logs](docs/operations.md#bad-logs).
 
