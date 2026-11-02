@@ -5,6 +5,18 @@ Deploys the Logstash EC2 (PDS Cloud Oracle Linux 9 AMI, Logstash from the RPM) t
 - **Tier:** Platform Engineer (`iam:PassRole`). See [permission tiers](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md#required-aws-permissions).
 - **Apply and verify:** [Phase 3](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md#phase-3---batch-s3-and-logstash-ec2). Deploy `iam`, `s3`, and the o11y-platform `opensearch` module first; the plan fails if their SSM parameters are missing.
 - **Venue inputs:** `cds-infra-deploy`, `venues/<venue>/o11y-cloudfront-batch/logstash/terragrunt.hcl`.
+- **Testing an unmerged change** (dev, test, or prod): plan from `cds-infra-deploy` with `TG_SOURCE` set to `${MODULE_DIR}//terraform/logstash`, without editing `ref=` or `module_ref`. See the runbook [Testing an unmerged change](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md#testing-an-unmerged-change) and the `cds-infra-deploy` README section "Test unmerged module changes locally". The plan fails until the `pdc-cds-infra` `private-hosted-zone` stack is applied in that venue, because the module reads the private zone from SSM.
+- **The inner `ec2` module** is pinned to a `pdc-tf-modules` tag, and `TG_SOURCE` does not change it. Only when you are also testing an unmerged `ec2` module change, add a temporary `terraform/logstash/override.tf` (git-ignored) in your local checkout that points the `module "ec2"` block at your local `pdc-tf-modules` checkout, and delete it afterwards:
+
+  ```bash
+  EC2_MODULE_DIR="<path-to-pdc-tf-modules-checkout>/terraform/modules/ec2"
+
+  cat > "${MODULE_DIR}/terraform/logstash/override.tf" << EOF
+  module "ec2" {
+    source = "${EC2_MODULE_DIR}"
+  }
+  EOF
+  ```
 
 By default the module creates the EC2 in every venue. `manage_ec2_instance = false` instead publishes an externally managed instance; see [Using an existing EC2](#using-an-existing-ec2-manage_ec2_instance--false).
 
