@@ -15,6 +15,18 @@ data "aws_ssm_parameter" "ec2_instance_profile_name" {
   name = "/pds/${var.component}/iam/roles/ec2/instance-profile-name"
 }
 
+# Private hosted zone published by pdc-cds-infra (terraform/private-hosted-zone). The zone is read
+# from SSM, not looked up by name. Only needed when this module creates the EC2 and its DNS record.
+data "aws_ssm_parameter" "private_zone_id" {
+  count = var.manage_ec2_instance ? 1 : 0
+  name  = "/pds/private-hosted-zone/id"
+}
+
+data "aws_ssm_parameter" "private_zone_name" {
+  count = var.manage_ec2_instance ? 1 : 0
+  name  = "/pds/private-hosted-zone/name"
+}
+
 # TODO: vpc_id should be sourced from SSM once published under /pds/cds-infra/vpc/.
 data "aws_subnets" "private" {
   count = var.manage_ec2_instance ? 1 : 0

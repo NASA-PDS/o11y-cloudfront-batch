@@ -12,7 +12,7 @@ The deployment order, permission tiers, credentials setup, and cross-repo SSM co
 terraform/
   ├── iam/         # EC2 role + profile, access policy
   ├── s3/          # S3 log bucket
-  ├── logstash/    # Logstash EC2, security group
+  ├── logstash/    # Logstash EC2, security group, DNS record
   └── templates/   # Logstash userdata
 ```
 
