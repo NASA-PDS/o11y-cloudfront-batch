@@ -2233,6 +2233,9 @@
                 },
                 "status_code": {
                   "type": "long"
+                },
+                "substatus": {
+                  "type": "long"
                 }
               }
             },

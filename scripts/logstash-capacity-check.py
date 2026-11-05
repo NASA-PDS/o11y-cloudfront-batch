@@ -288,6 +288,28 @@ def pct(value: Optional[float]) -> str:
     return "n/a" if value is None else f"{value:.0f}%"
 
 
+def api_unreachable(api: str, err: Exception) -> int:
+    """Report that the Logstash monitoring API cannot be reached and return exit code 2."""
+    print(f"Cannot reach the Logstash API at {api}: {err}", file=sys.stderr)
+    print("Is the service running? systemctl --user status logstash", file=sys.stderr)
+    return 2
+
+
+def io_bound_advice(workers: int, target: int, cap: int, plugin: str) -> str:
+    """What to do about an I/O-bound pipeline: raise workers only while the suggested count is above the current."""
+    if target > workers:
+        return (
+            f"Waiting threads use no CPU, so raise pipeline.workers from {workers} to about {target} "
+            f"to keep more '{plugin}' calls in flight. Also cut the wait per call "
+            "(caching, shorter timeouts, fewer retries)."
+        )
+    return (
+        f"pipeline.workers ({workers}) is already at the cap of {cap} (4 per vCPU), so more '{plugin}' calls "
+        "in flight would come from cutting the wait per call (caching, shorter timeouts, fewer retries), "
+        "not from adding workers."
+    )
+
+
 def main() -> int:
     """Sample, print the report, and return a process exit code (2 if the API is unreachable)."""
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
@@ -303,11 +325,8 @@ def main() -> int:
     pid = logstash_pid()
     try:
         settings = http_json(f"{args.api}/_node/pipelines").get("pipelines", {})
-        s1 = http_json(f"{args.api}/_node/stats")
     except (urllib.error.URLError, OSError) as err:
-        print(f"Cannot reach the Logstash API at {args.api}: {err}", file=sys.stderr)
-        print("Is the service running? systemctl --user status logstash", file=sys.stderr)
-        return 2
+        return api_unreachable(args.api, err)
     os_get, os_note = (None, "skipped (--skip-opensearch)") if args.skip_opensearch else opensearch_client()
     o1 = o2 = None
     if os_get:
@@ -315,6 +334,12 @@ def main() -> int:
             o1 = opensearch_snapshot(os_get)
         except OS_ERRORS as err:
             os_note = f"query failed: {err} (check IAM and fine-grained access control)"
+    # The OpenSearch query can take many seconds, so sample the Logstash counters, CPU and clock together
+    # after it. Otherwise the counters would cover a longer window than `elapsed` and overstate the rates.
+    try:
+        s1 = http_json(f"{args.api}/_node/stats")
+    except (urllib.error.URLError, OSError) as err:
+        return api_unreachable(args.api, err)
     cpu1, tick1, t1 = cpu_times(), proc_ticks(pid), time.monotonic()
 
     print(
@@ -470,14 +495,13 @@ def main() -> int:
                     # Workers are blocked inside one plugin, not computing: waiting threads cost no CPU.
                     # Scale workers by the CPU headroom (at most 4x), keeping Logstash under IO_CPU_TARGET of the cores.
                     scale = IO_MAX_SCALE if not ls_cores else min(IO_MAX_SCALE, IO_CPU_TARGET * vcpus / ls_cores)
-                    target = min(4 * vcpus, max(workers + 1, round(workers * scale)))
+                    cap = 4 * vcpus
+                    target = min(cap, max(workers + 1, round(workers * scale)))
                     findings.append(
                         f"Pipeline '{name}': I/O-bound. {top_label} holds {100 * share:.0f}% of worker time "
                         f"({top_ms / 1000:.0f}s in a {elapsed:.0f}s window) while the system is only "
                         f"{sys_busy:.0f}% busy, so the workers are waiting on '{top_name}', not computing. "
-                        f"Waiting threads use no CPU, so raise pipeline.workers from {workers} to about {target} "
-                        f"to keep more '{top_name}' calls in flight. Also cut the wait per call "
-                        "(caching, shorter timeouts, fewer retries)."
+                        f"{io_bound_advice(workers, target, cap, top_name)}"
                     )
                     continue
                 target = min(vcpus, max(workers + 1, vcpus // n_active))

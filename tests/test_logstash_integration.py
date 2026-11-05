@@ -41,7 +41,9 @@ class TestLogstashIntegration(unittest.TestCase):
             "template_errors": 0,
             "empty_user_agents": 1,
             "duplicate_sources": 0,
-            "processed_logs": 30,  # +2 url-field-parsing lines (10.99.1.1, 10.99.1.2), +1 cache-buster (91.107.144.23), +2 GEO IIS lines with time-taken "-"
+            # +2 url-field-parsing lines (10.99.1.1, 10.99.1.2), +1 cache-buster (91.107.144.23),
+            # +4 GEO IIS lines with time-taken "-", +2 GEO IIS lines with a sub-status
+            "processed_logs": 32,
             "corrupt_logs": 3,
         },
         "ftp": {
@@ -548,6 +550,17 @@ class TestLogstashIntegration(unittest.TestCase):
             self.assertEqual(event.get("http", {}).get("response", {}).get("status_code"), 200)
             self.assertEqual(str(event.get("error", {}).get("code")), "0", "the win32 status must reach error.code")
             self.assertNotIn("iis", event, "sub-status and win32 status must use the http.response fields")
+
+        # A non-zero sub-status stays in its own integer field; the status code is not rewritten to "404.6"
+        with_substatus = by_source["156.68.99.213"]["http"]["response"]
+        self.assertEqual(with_substatus.get("status_code"), 404)
+        self.assertEqual(with_substatus.get("substatus"), 6)
+        self.assertEqual(str(by_source["156.68.99.213"].get("error", {}).get("code")), "2")
+
+        # A "-" status with a sub-status present must not produce a bogus status code
+        without_status = by_source["156.68.99.214"]["http"]["response"]
+        self.assertNotIn("status_code", without_status, "a '-' status must leave http.response.status_code unset")
+        self.assertEqual(without_status.get("substatus"), 5)
 
     def validate_cloudfront_cache_fields(self, output_dir: Path, expected: Dict[str, Dict]):
         """Verify the aws.cloudfront cache and latency fields of processed CloudFront events.
