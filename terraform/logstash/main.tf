@@ -92,3 +92,18 @@ module "ec2" {
     cicd      = var.cicd
   }
 }
+
+# ---------------------------------------------------------------------------
+# DNS - A record in the shared private hosted zone, so the name resolves only
+# inside the VPC. The record name matches the ec2 Name tag, so the SSH target
+# and instance name are the same. Only created when this module manages the EC2
+# (manage_ec2_instance = true).
+# ---------------------------------------------------------------------------
+resource "aws_route53_record" "logstash" {
+  count   = var.manage_ec2_instance ? 1 : 0
+  zone_id = data.aws_ssm_parameter.private_zone_id[0].insecure_value
+  name    = "${local.ec2_name}.${data.aws_ssm_parameter.private_zone_name[0].insecure_value}"
+  type    = "A"
+  ttl     = 30
+  records = [module.ec2[0].private_ips[local.ec2_name]]
+}

@@ -12,7 +12,7 @@ The deployment order, permission tiers, credentials setup, and cross-repo SSM co
 terraform/
   ├── iam/         # EC2 role + profile, access policy
   ├── s3/          # S3 log bucket
-  ├── logstash/    # Logstash EC2, security group
+  ├── logstash/    # Logstash EC2, security group, DNS record
   └── templates/   # Logstash userdata
 ```
 
@@ -90,6 +90,26 @@ cd "${O11Y_BATCH_DIR}/terraform"
    ```bash
    task s3:plan VENUE="${VENUE}"
    ```
+
+### Testing an unmerged change through Terragrunt
+
+To plan a change that is not merged yet against a real venue (dev, test, or prod) without editing `ref=` or `module_ref`, point Terragrunt at your local checkout with `TG_SOURCE`. The steps are in the o11y-platform runbook [Testing an unmerged change](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md#testing-an-unmerged-change); the full procedure is the `cds-infra-deploy` README section "Test unmerged module changes locally". Run it from the `cds-infra-deploy` checkout, one leaf at a time, plan only.
+
+| Module | `SOURCE_PATH` |
+|---|---|
+| `iam` | `terraform/iam` |
+| `s3` | `terraform/s3` |
+| `logstash` | `terraform/logstash` |
+
+```bash
+MODULE_DIR="<path-to-this-checkout>"
+SOURCE_PATH="terraform/logstash"
+export TG_SOURCE="${MODULE_DIR}//${SOURCE_PATH}"
+
+task plan VENUE=dev COMPONENT=o11y-cloudfront-batch/logstash
+```
+
+`logstash` reads the private hosted zone from SSM (`/pds/private-hosted-zone/id` and `/name`), so its plan fails until the `pdc-cds-infra` `private-hosted-zone` stack is applied in that venue.
 
 ## Teardown
 

@@ -5,6 +5,18 @@ Deploys the Logstash EC2 (PDS Cloud Oracle Linux 9 AMI, Logstash from the RPM) t
 - **Tier:** Platform Engineer (`iam:PassRole`). See [permission tiers](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md#required-aws-permissions).
 - **Apply and verify:** [Phase 3](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md#phase-3---batch-s3-and-logstash-ec2). Deploy `iam`, `s3`, and the o11y-platform `opensearch` module first; the plan fails if their SSM parameters are missing.
 - **Venue inputs:** `cds-infra-deploy`, `venues/<venue>/o11y-cloudfront-batch/logstash/terragrunt.hcl`.
+- **Testing an unmerged change** (dev, test, or prod): plan from `cds-infra-deploy` with `TG_SOURCE` set to `${MODULE_DIR}//terraform/logstash`, without editing `ref=` or `module_ref`. See the runbook [Testing an unmerged change](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md#testing-an-unmerged-change) and the `cds-infra-deploy` README section "Test unmerged module changes locally". The plan fails until the `pdc-cds-infra` `private-hosted-zone` stack is applied in that venue, because the module reads the private zone from SSM.
+- **The inner `ec2` module** is pinned to a `pdc-tf-modules` tag, and `TG_SOURCE` does not change it. Only when you are also testing an unmerged `ec2` module change, add a temporary `terraform/logstash/override.tf` (git-ignored) in your local checkout that points the `module "ec2"` block at your local `pdc-tf-modules` checkout, and delete it afterwards:
+
+  ```bash
+  EC2_MODULE_DIR="<path-to-pdc-tf-modules-checkout>/terraform/modules/ec2"
+
+  cat > "${MODULE_DIR}/terraform/logstash/override.tf" << EOF
+  module "ec2" {
+    source = "${EC2_MODULE_DIR}"
+  }
+  EOF
+  ```
 
 By default the module creates the EC2 in every venue. `manage_ec2_instance = false` instead publishes an externally managed instance; see [Using an existing EC2](#using-an-existing-ec2-manage_ec2_instance--false).
 
@@ -14,6 +26,7 @@ Created only when `manage_ec2_instance = true`, except the instance ID parameter
 
 - `module.ec2` ([pdc-tf-modules](https://github.com/NASA-PDS/pdc-tf-modules) `ec2`): the instance, tagged `Patch = "true"`, in a private subnet, with the bastion target security group attached. Userdata installs Logstash and sets up `pdsops` at first boot. See [Replacing the instance](#replacing-the-instance).
 - `aws_security_group.logstash`: no inbound rules; all outbound allowed (SSM, DynamoDB SSH-key lookup, package repos, S3, OpenSearch). SSH ingress comes from the bastion target security group.
+- `aws_route53_record.logstash`: A record `<Name tag>.<zone name>` to the private IP, in the shared private hosted zone read from SSM (`/pds/private-hosted-zone/id` and `/name`). The name resolves only inside the VPC.
 - SSM parameters, below.
 
 ## SSM parameters
@@ -23,8 +36,12 @@ Created only when `manage_ec2_instance = true`, except the instance ID parameter
 | `/pds/o11y-cloudfront-batch/s3/bucket_name` | read | `s3` module |
 | `/pds/o11y-platform/opensearch/opensearch_endpoint` | read | o11y-platform `opensearch` |
 | `/pds/o11y-cloudfront-batch/iam/roles/ec2/instance-profile-name` | read | `iam` module |
+| `/pds/private-hosted-zone/id` | read | pdc-cds-infra [private-hosted-zone](https://github.com/NASA-PDS/pdc-cds-infra/blob/main/terraform/private-hosted-zone/README.md#publishes) |
+| `/pds/private-hosted-zone/name` | read | pdc-cds-infra [private-hosted-zone](https://github.com/NASA-PDS/pdc-cds-infra/blob/main/terraform/private-hosted-zone/README.md#publishes) |
+| `/pds/hosted-zone/name` | read | account baseline (bastion address in the [Access model](#access-model)) |
 | `bastion_target_sg_ssm_path` (input) | read | pdc-cds-infra [bastion-core](https://github.com/NASA-PDS/pdc-cds-infra/blob/main/terraform/bastion-core/README.md#ssm-parameters-published) |
 | `/pds/o11y-cloudfront-batch/ec2/logstash_instance_id` | published | SSM session target |
+| `/pds/o11y-cloudfront-batch/ec2/logstash_fqdn` | published | SSH target via the bastion |
 | `/pds/o11y-cloudfront-batch/ec2/logstash_security_group_id` | published | o11y-platform `opensearch` (HTTPS ingress) |
 
 Cross-repo parameters are in the [SSM contract](https://github.com/NASA-PDS/o11y-platform/blob/main/terraform/README.md#ssm-contract).
@@ -50,40 +67,39 @@ Cross-repo parameters are in the [SSM contract](https://github.com/NASA-PDS/o11y
 | Name | Description |
 |---|---|
 | `logstash_instance_id` | Instance ID. |
+| `logstash_fqdn` | FQDN in the private hosted zone; null when `manage_ec2_instance = false`. |
 
 ## Access model
 
 Everyone connects through the CDS bastion: the EC2 has only a private IP. SSH to the bastion with your NASA ID, then to the EC2 with the same ID. The AMI checks it against the user-key store (DynamoDB) on every login, so your key must be enrolled; enrollment and the bastion itself are covered in the pdc-cds-infra [bastion-core README](https://github.com/NASA-PDS/pdc-cds-infra/blob/main/terraform/bastion-core/README.md#connecting-to-the-bastion). Then switch to the shared `pdsops` account, which owns Logstash.
 
 ```bash
-# On your workstation: look up the bastion zone and the EC2 private IP.
+# On your workstation: look up the bastion zone and the EC2 hostname.
 NASA_ID="<nasa-id>"
 ZONE=$(aws ssm get-parameter --name /pds/hosted-zone/name \
   --query Parameter.Value --output text)
-INSTANCE_ID=$(aws ssm get-parameter \
-  --name /pds/o11y-cloudfront-batch/ec2/logstash_instance_id \
+FQDN=$(aws ssm get-parameter \
+  --name /pds/o11y-cloudfront-batch/ec2/logstash_fqdn \
   --query Parameter.Value --output text)
-TARGET=$(aws ec2 describe-instances --instance-ids ${INSTANCE_ID} \
-  --query 'Reservations[0].Instances[0].PrivateIpAddress' --output text)
-echo "Target: ${TARGET}"
+echo "Target: ${FQDN}"
 ssh ${NASA_ID}@pds-cds-bastion-core.${ZONE}
 
-# On the bastion: set TARGET to the value printed above.
-TARGET="<target-ip>"
-ssh ${USER}@${TARGET}
+# On the bastion: set FQDN to the Target value printed above.
+FQDN="<target-fqdn>"
+ssh ${USER}@${FQDN}
 sudo -iu pdsops
 ```
 
-The private IP changes when the instance is replaced, so look it up each time.
+The hostname is in the venue's private hosted zone, so it resolves only inside the VPC: from the bastion, not from your workstation. `logstash_fqdn` is published only when this module creates the EC2; otherwise use the instance's private IP or hostname.
 
 ### Local shortcut
 
-`ProxyJump` in `~/.ssh/config` reaches the EC2 through the bastion in one command. Your workstation key authenticates both hops, so no key or agent forwarding is needed on the bastion, and `scp`, `rsync`, and port forwards work. `~/.ssh/config` is a static file, so this appends the entries with the values substituted when it is written. Set `TARGET` to the private IP looked up above:
+`ProxyJump` in `~/.ssh/config` reaches the EC2 through the bastion in one command. Your workstation key authenticates both hops, so no key or agent forwarding is needed on the bastion, and `scp`, `rsync`, and port forwards work. `~/.ssh/config` is a static file, so this appends the entries with the values substituted when it is written. The bastion resolves `HostName` for the second hop, so the private name works from your workstation. Set `FQDN` to the target looked up above:
 
 ```bash
 NASA_ID="<nasa-id>"
 BASTION="pds-cds-bastion-core.${ZONE}"
-TARGET="<target-ip>"
+FQDN="<target-fqdn>"
 
 cat >> ~/.ssh/config << EOF
 
@@ -92,7 +108,7 @@ Host cds-bastion
     User ${NASA_ID}
 
 Host cds-logstash
-    HostName ${TARGET}
+    HostName ${FQDN}
     User ${NASA_ID}
     ProxyJump cds-bastion
 EOF
@@ -130,14 +146,14 @@ A userdata change (for example `logstash_version`) replaces the instance (`user_
 
 A replacement:
 
-- gets a new instance ID, IP, and host keys; the SSM parameters follow
+- gets a new instance ID, IP, and host keys; the DNS record and SSM parameters follow
 - loses the S3 `sincedb`, so logs are re-read. `document_id` is a fingerprint, so documents are overwritten, not duplicated. For a large backlog, deploy with `ENABLED_NODES` ([First-boot setup](#first-boot-setup))
 - deletes the old root volume
 - needs the [First-boot setup](#first-boot-setup) operator steps re-run
 
 ## Using an existing EC2 (`manage_ec2_instance = false`)
 
-Set `manage_ec2_instance = false` and `existing_instance_id` in the venue inputs. `task apply` then only publishes `logstash_instance_id`; it never changes the EC2, and `logstash_security_group_id` is not published.
+Set `manage_ec2_instance = false` and `existing_instance_id` in the venue inputs. `task apply` then only publishes `logstash_instance_id`; it never changes the EC2, and `logstash_fqdn` and `logstash_security_group_id` are not published.
 
 Prerequisites on the instance, outside this module's control:
 
