@@ -349,7 +349,10 @@ def main() -> int:
     print(f"Sampling for {args.interval}s ...")
     time.sleep(args.interval)
 
-    s2 = http_json(f"{args.api}/_node/stats")
+    try:
+        s2 = http_json(f"{args.api}/_node/stats")
+    except (urllib.error.URLError, OSError) as err:
+        return api_unreachable(args.api, err)
     cpu2, tick2, t2 = cpu_times(), proc_ticks(pid), time.monotonic()
     if os_get and o1:
         try:

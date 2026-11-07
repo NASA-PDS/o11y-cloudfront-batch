@@ -42,8 +42,9 @@ class TestLogstashIntegration(unittest.TestCase):
             "empty_user_agents": 1,
             "duplicate_sources": 0,
             # +2 url-field-parsing lines (10.99.1.1, 10.99.1.2), +1 cache-buster (91.107.144.23),
-            # +4 GEO IIS lines with time-taken "-", +2 GEO IIS lines with a sub-status
-            "processed_logs": 32,
+            # +4 GEO IIS lines with time-taken "-", +2 GEO IIS lines with a sub-status,
+            # +1 site-less minimal IIS line with win32 status "-"
+            "processed_logs": 33,
             "corrupt_logs": 3,
         },
         "ftp": {
@@ -561,6 +562,13 @@ class TestLogstashIntegration(unittest.TestCase):
         without_status = by_source["156.68.99.214"]["http"]["response"]
         self.assertNotIn("status_code", without_status, "a '-' status must leave http.response.status_code unset")
         self.assertEqual(without_status.get("substatus"), 5)
+
+        # A site-less minimal line with "-" for the win32 status parses and leaves error.code unset
+        minimal = by_source.get("156.68.99.215")
+        self.assertIsNotNone(minimal, "Expected a processed event for the site-less minimal IIS line")
+        self.assertEqual(minimal.get("user_agent", {}).get("original"), "Mozilla/5.0")
+        self.assertEqual(minimal["http"]["response"].get("status_code"), 200)
+        self.assertNotIn("code", minimal.get("error", {}), "a '-' win32 status must leave error.code unset")
 
     def validate_cloudfront_cache_fields(self, output_dir: Path, expected: Dict[str, Dict]):
         """Verify the aws.cloudfront cache and latency fields of processed CloudFront events.

@@ -256,6 +256,37 @@ class TestMain(unittest.TestCase):
             self.assertEqual(cc.main(), 2)
         self.assertIn("Cannot reach the Logstash API", err.getvalue())
 
+    def test_api_lost_during_the_sampling_interval(self):
+        """A Logstash restart or timeout before the second sample ends the run with exit code 2, not a traceback."""
+        idle = {"en": pipeline_stats(0, [plugin("grok-filter-id", "grok", 0)])}
+        responses = iter(
+            [
+                {"pipelines": {"en": {"workers": 4, "batch_size": 125}}},
+                node_stats(idle),
+                urllib.error.URLError("timed out"),
+            ]
+        )
+
+        def fake_http_json(url: str, timeout: float = 10.0) -> Dict[str, Any]:
+            response = next(responses)
+            if isinstance(response, urllib.error.URLError):
+                raise response
+            return response
+
+        err = io.StringIO()
+        with contextlib.ExitStack() as stack:
+            stack.enter_context(patch.object(sys, "argv", ["capacity-check", "--skip-credits", "--skip-opensearch"]))
+            stack.enter_context(patch.object(cc, "http_json", fake_http_json))
+            stack.enter_context(patch.object(cc, "imds", return_value=None))
+            stack.enter_context(patch.object(cc, "logstash_pid", return_value=None))
+            stack.enter_context(patch.object(cc, "mem_total_gib", return_value=None))
+            stack.enter_context(patch.object(cc, "cpu_times", return_value=None))
+            stack.enter_context(patch.object(cc.time, "sleep"))
+            stack.enter_context(contextlib.redirect_stdout(io.StringIO()))
+            stack.enter_context(contextlib.redirect_stderr(err))
+            self.assertEqual(cc.main(), 2)
+        self.assertIn("Cannot reach the Logstash API", err.getvalue())
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
