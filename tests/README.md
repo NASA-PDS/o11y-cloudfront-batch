@@ -8,6 +8,7 @@
 | `test_sample_logs.py` | `copy-sample-logs` |
 | `test_s3_sync.py` | The deprecated `s3-log-sync` tool |
 | `test_egress_report.py` | `egress_report.py` |
+| `test_logstash_capacity_check.py` | `scripts/logstash-capacity-check.py`: the /proc and Logstash API helpers, and the findings it prints |
 | `conftest.py` | Shared helpers |
 
 Run the Python unit tests with `pytest`, or all supported Python versions and lint with `tox`. The integration tests need Logstash, so run them in Docker.

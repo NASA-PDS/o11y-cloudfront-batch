@@ -52,6 +52,7 @@ Each topic has one home; other docs link to it.
 | Deploy, subset-of-nodes rollout, monitoring, troubleshooting, tuning | [Operations Runbook](docs/operations.md) |
 | Pipeline integration tests, adding a log format | [`tests/README.md`](tests/README.md) |
 | OpenSearch index template | [`config/opensearch/README.md`](config/opensearch/README.md) |
+| Dashboards export, the archive-path filter and the paths it covers | [`config/opensearch-ui/README.md`](config/opensearch-ui/README.md) |
 | Bastion host, SSH key enrollment | pdc-cds-infra [bastion-core](https://github.com/NASA-PDS/pdc-cds-infra/blob/main/terraform/bastion-core/README.md) |
 | CloudFront distribution and the o11y flags | pdc-cds-infra [`pds-main`](https://github.com/NASA-PDS/pdc-cds-infra/blob/main/terraform/cloudfront/pds-main/README.md#o11y-integration) |
 
@@ -122,10 +123,14 @@ config/logstash/config/
 | `url.query_params` | Query string as an object, e.g. `url.query_params.target: "lucy"` |
 | `url.query_parts` | `"key=value"` strings, e.g. `url.query_parts: "*lucy*"` |
 | `http.request.method`, `http.response.status_code`, `http.response.body.bytes` | Request details |
+| `http.response.substatus` | IIS sub-status code, e.g. `6` for a `404.6` response (IIS web events only) |
 | `user_agent.original` | User agent string |
 | `event.start` | Request timestamp |
 | `organization.name` | Node ID (set by the input) |
 | `event.dataset` | Source, e.g. `en.http`, `naif.ftp` |
+| `aws.cloudfront.result_type`, `.response_result_type`, `.detailed_result_type` | CloudFront cache result, e.g. `Hit`, `Miss`, `Error` (CloudFront events only) |
+| `aws.cloudfront.edge_location` | CloudFront edge location, e.g. `FRA56-P2` (CloudFront events only) |
+| `aws.cloudfront.time_taken_ms`, `.time_to_first_byte_ms` | CloudFront latency in milliseconds; `time_to_first_byte_ms` is not set when CloudFront records `-` |
 
 **Bad logs:** events with certain failure tags go to `/tmp/bad_logs_YYYY-MM.txt` on the EC2 instead of OpenSearch. See [Bad logs](docs/operations.md#bad-logs).
 

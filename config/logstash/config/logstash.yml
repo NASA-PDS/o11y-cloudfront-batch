@@ -4,7 +4,7 @@ path.logs: /var/log/logstash
 
 # ----------- Pipeline Configuration -----------
 pipeline.batch.size: 100           # Tune based on your instance size (t3.xlarge is good here)
-pipeline.workers: 1                # Matches vCPU count on t3.xlarge
+pipeline.workers: 4                # Workers mostly wait on reverse DNS lookups, so this can exceed the vCPU count
 pipeline.ordered: false            # Enables parallel event processing
 pipeline.batch.delay: 15
 queue.type: persisted              # durable disk-based buffering between inputs and filters/outputs

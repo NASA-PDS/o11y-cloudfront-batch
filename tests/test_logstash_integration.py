@@ -41,7 +41,10 @@ class TestLogstashIntegration(unittest.TestCase):
             "template_errors": 0,
             "empty_user_agents": 1,
             "duplicate_sources": 0,
-            "processed_logs": 29,  # +2 url-field-parsing lines (10.99.1.1, 10.99.1.2), +1 cache-buster (91.107.144.23), +2 GEO IIS lines with time-taken "-"
+            # +2 url-field-parsing lines (10.99.1.1, 10.99.1.2), +1 cache-buster (91.107.144.23),
+            # +4 GEO IIS lines with time-taken "-", +2 GEO IIS lines with a sub-status,
+            # +1 site-less minimal IIS line with win32 status "-"
+            "processed_logs": 33,
             "corrupt_logs": 3,
         },
         "ftp": {
@@ -51,10 +54,10 @@ class TestLogstashIntegration(unittest.TestCase):
             "template_errors": 0,
             "empty_user_agents": 0,
             "duplicate_sources": 0,
-            "processed_logs": 16,
-            # 6 deliberately invalid lines + the truncated IIS FTP fragment ("elClosed"); the IIS data-channel
+            "processed_logs": 20,
+            # 5 deliberately invalid lines + the truncated IIS FTP fragment ("elClosed"); the IIS data-channel
             # lines (sc-status "-") parse and are dropped as non-RETR commands
-            "corrupt_logs": 7,
+            "corrupt_logs": 6,
         },
         "cloudfront": {
             "parse_failures": 0,
@@ -517,27 +520,75 @@ class TestLogstashIntegration(unittest.TestCase):
         self.assertNotIn("query_parts", url2, "url.query_parts must not be set when there is no query string")
 
     def validate_iis_referer_parsing(self, output_dir: Path):
-        """Verify the cs(Referer) column in GEO IIS lines is not absorbed into user_agent.original."""
+        """Verify GEO IIS web lines keep their columns: client IP, port, user agent, referrer."""
         events = self.load_processed_events(output_dir)
         by_source = {e.get("source", {}).get("address"): e for e in events}
-        expected_referrers = {
-            "91.199.87.198": None,
-            "54.250.58.217": None,
-            "54.250.58.218": "https://example.org/search?q=lro",
+        plus_ua = "Mozilla/5.0+(Windows+NT+10.0;+Win64;+x64)"
+        space_ua = (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/140.0.0.0 Safari/537.36"
+        )
+        expected = {
+            "91.199.87.198": (plus_ua, None),
+            "54.250.58.217": (plus_ua, None),
+            "54.250.58.218": (plus_ua, "https://example.org/search?q=lro"),
+            "156.68.99.212": (space_ua, None),
         }
-        for address, referrer in expected_referrers.items():
+        for address, (user_agent, referrer) in expected.items():
             self.assertIn(address, by_source, f"Expected a processed GEO IIS event for {address}")
             event = by_source[address]
             self.assertEqual(
                 event.get("user_agent", {}).get("original"),
-                "Mozilla/5.0+(Windows+NT+10.0;+Win64;+x64)",
-                "user_agent.original must not include the referer column",
+                user_agent,
+                "user_agent.original must not include the client IP or the referer column",
             )
             self.assertEqual(
                 event.get("http", {}).get("request", {}).get("referrer"),
                 referrer,
                 "http.request.referrer must hold the referer, and be unset when it is '-'",
             )
+            self.assertEqual(str(event.get("server", {}).get("port")), "80", "server.port must be the numeric port")
+            self.assertEqual(event.get("http", {}).get("response", {}).get("status_code"), 200)
+            self.assertEqual(str(event.get("error", {}).get("code")), "0", "the win32 status must reach error.code")
+            self.assertNotIn("iis", event, "sub-status and win32 status must use the http.response fields")
+
+        # A non-zero sub-status stays in its own integer field; the status code is not rewritten to "404.6"
+        with_substatus = by_source["156.68.99.213"]["http"]["response"]
+        self.assertEqual(with_substatus.get("status_code"), 404)
+        self.assertEqual(with_substatus.get("substatus"), 6)
+        self.assertEqual(str(by_source["156.68.99.213"].get("error", {}).get("code")), "2")
+
+        # A "-" status with a sub-status present must not produce a bogus status code
+        without_status = by_source["156.68.99.214"]["http"]["response"]
+        self.assertNotIn("status_code", without_status, "a '-' status must leave http.response.status_code unset")
+        self.assertEqual(without_status.get("substatus"), 5)
+
+        # A site-less minimal line with "-" for the win32 status parses and leaves error.code unset
+        minimal = by_source.get("156.68.99.215")
+        self.assertIsNotNone(minimal, "Expected a processed event for the site-less minimal IIS line")
+        self.assertEqual(minimal.get("user_agent", {}).get("original"), "Mozilla/5.0")
+        self.assertEqual(minimal["http"]["response"].get("status_code"), 200)
+        self.assertNotIn("code", minimal.get("error", {}), "a '-' win32 status must leave error.code unset")
+
+    def validate_cloudfront_cache_fields(self, output_dir: Path, expected: Dict[str, Dict]):
+        """Verify the aws.cloudfront cache and latency fields of processed CloudFront events.
+
+        Args:
+            output_dir: Pipeline output directory.
+            expected: Per source address, the expected edge_location, result_type, response_result_type,
+                detailed_result_type, time_taken_ms and time_to_first_byte_ms.
+        """
+        by_source = {e.get("source", {}).get("address"): e for e in self.load_processed_events(output_dir)}
+        for address, want in expected.items():
+            self.assertIn(address, by_source, f"Expected a processed CloudFront event for {address}")
+            event = by_source[address]
+            cloudfront = event.get("aws", {}).get("cloudfront", {})
+            for name in ("edge_location", "result_type", "response_result_type", "detailed_result_type"):
+                self.assertEqual(cloudfront.get(name), want[name], f"aws.cloudfront.{name} for {address}")
+            for name in ("time_taken_ms", "time_to_first_byte_ms"):
+                self.assertAlmostEqual(cloudfront.get(name), want[name], places=3, msg=f"aws.cloudfront.{name}")
+            self.assertNotIn("duration", event.get("event", {}), "event.duration must not carry CloudFront timings")
+            self.assertEqual(event.get("temp", {}), {}, "CloudFront staging fields must not be left in [temp]")
 
     def test_https_log_processing(self):
         """Test processing of HTTPS logs."""
@@ -581,6 +632,29 @@ class TestLogstashIntegration(unittest.TestCase):
         # Validate output counts
         self.validate_output_counts(output_dir, "cloudfront")
 
+        # time-taken (seconds) becomes milliseconds; cache fields come from the trailing columns
+        self.validate_cloudfront_cache_fields(
+            output_dir,
+            {
+                "198.51.100.194": {
+                    "edge_location": "FRA56-P2",
+                    "result_type": "Miss",
+                    "response_result_type": "Miss",
+                    "detailed_result_type": "Miss",
+                    "time_taken_ms": 791.0,
+                    "time_to_first_byte_ms": 784.0,
+                },
+                "203.0.113.42": {
+                    "edge_location": "IAD89-C1",
+                    "result_type": "Error",
+                    "response_result_type": "Error",
+                    "detailed_result_type": "Error",
+                    "time_taken_ms": 123.0,
+                    "time_to_first_byte_ms": 120.0,
+                },
+            },
+        )
+
     def test_cloudfront_json_log_processing(self):
         """Test processing of CloudFront JSON Standard Logging v2 logs."""
         if "cloudfront-json" not in self.ENABLED_CONFIGS:
@@ -592,6 +666,28 @@ class TestLogstashIntegration(unittest.TestCase):
         self.assertTrue(success, "Logstash pipeline failed for CloudFront JSON logs")
 
         self.validate_output_counts(output_dir, "cloudfront-json")
+
+        self.validate_cloudfront_cache_fields(
+            output_dir,
+            {
+                "198.51.100.42": {
+                    "edge_location": "MIA50-P2",
+                    "result_type": "Miss",
+                    "response_result_type": "Miss",
+                    "detailed_result_type": "Miss",
+                    "time_taken_ms": 516.0,
+                    "time_to_first_byte_ms": 516.0,
+                },
+                "203.0.113.50": {
+                    "edge_location": "SIN2-P4",
+                    "result_type": "FunctionGeneratedResponse",
+                    "response_result_type": "FunctionGeneratedResponse",
+                    "detailed_result_type": "FunctionGeneratedResponse",
+                    "time_taken_ms": 1.0,
+                    "time_to_first_byte_ms": 1.0,
+                },
+            },
+        )
 
     @unittest.skip("Skipping configuration file existence test")
     def test_configuration_files_exist(self):
