@@ -18,7 +18,7 @@ resource "aws_ssm_parameter" "logstash_fqdn" {
   name        = "/pds/o11y-cloudfront-batch/ec2/logstash_fqdn"
   type        = "String"
   value       = aws_route53_record.logstash[0].fqdn
-  description = "FQDN of the Logstash EC2 in the shared hosted zone (SSH target from the bastion)"
+  description = "FQDN of the Logstash EC2 in the shared private hosted zone (SSH target from the bastion)"
 }
 
 resource "aws_ssm_parameter" "logstash_security_group_id" {
@@ -37,5 +37,5 @@ output "logstash_instance_id" {
 
 output "logstash_fqdn" {
   value       = var.manage_ec2_instance ? aws_route53_record.logstash[0].fqdn : null
-  description = "FQDN of the Logstash EC2 in the shared hosted zone. SSH to this from the bastion. Null when manage_ec2_instance = false."
+  description = "FQDN of the Logstash EC2 in the shared private hosted zone. SSH to this from the bastion. Null when manage_ec2_instance = false."
 }
