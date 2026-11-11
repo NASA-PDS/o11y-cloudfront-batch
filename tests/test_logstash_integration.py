@@ -56,7 +56,8 @@ class TestLogstashIntegration(unittest.TestCase):
             "duplicate_sources": 0,
             "processed_logs": 20,
             # 5 deliberately invalid lines + the truncated IIS FTP fragment ("elClosed"); the IIS data-channel
-            # lines (sc-status "-") parse and are dropped as non-RETR commands
+            # lines (sc-status "-") and the non-FTP text sent to the FTP port ("sec-ch-ua-full-version-list:", "++")
+            # parse and are dropped as non-RETR commands
             "corrupt_logs": 6,
         },
         "cloudfront": {
@@ -619,6 +620,22 @@ class TestLogstashIntegration(unittest.TestCase):
 
         # Validate output counts
         self.validate_output_counts(output_dir, "ftp")
+
+        # Each event field that ECS defines as a single value must not be an array
+        events = self.load_processed_events(output_dir)
+        for event in events:
+            outcome = event.get("event", {}).get("outcome")
+            self.assertNotIsInstance(outcome, list, f"event.outcome must be a single value: {event.get('message')}")
+
+        # The kept IIS FTP RETR line replaces the common defaults instead of appending to them
+        retr = [e for e in events if "RETR /insight/superseded/" in e.get("message", "")]
+        self.assertEqual(1, len(retr), "Expected 1 processed IIS FTP RETR event")
+        retr_event = retr[0]["event"]
+        self.assertEqual("RETR", retr_event["action"])
+        self.assertEqual(["file", "network"], retr_event["category"])
+        self.assertEqual(["access", "info"], retr_event["type"])
+        self.assertEqual("success", retr_event["outcome"])
+        self.assertNotIn("ftp", retr[0], "ftp.command must not leave an empty ftp object behind")
 
     def test_cloudfront_log_processing(self):
         """Test processing of CloudFront legacy W3C tab-delimited logs."""
