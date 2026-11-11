@@ -19,8 +19,9 @@ class TestOpenSearchTemplate(unittest.TestCase):
     def test_query_params_is_flat_object(self):
         """Every distinct query parameter name must not become its own mapped field."""
         query_params = self.mappings["properties"]["url"]["properties"]["query_params"]
-        self.assertEqual("flat_object", query_params["type"])
-        self.assertNotIn("dynamic", query_params)
+        # Only the type is set: flat_object rejects keyword parameters such as ignore_above, and a template that
+        # OpenSearch rejects fails the whole deploy
+        self.assertEqual({"type": "flat_object"}, query_params)
 
     def test_no_dynamic_template_maps_query_param_subfields(self):
         """A flat_object has no mapped subfields, so a dynamic template for them has nothing to apply to."""

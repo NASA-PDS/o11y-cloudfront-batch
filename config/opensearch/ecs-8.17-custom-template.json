@@ -7579,7 +7579,6 @@
               "type": "keyword"
             },
             "query_params": {
-              "ignore_above": 1024,
               "type": "flat_object"
             }
           }
