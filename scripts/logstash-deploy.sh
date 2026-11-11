@@ -31,9 +31,9 @@
 #                              deploy to let EN's backlog catch up alone,
 #                              then redeploy with it unset to bring the rest
 #                              online.
-#   LOG_YEARS                — comma/space-separated years or YYYY-YYYY ranges
-#                              (e.g. "2023" or "2021-2024"). Each S3 input reads
-#                              only objects dated in those years. Default: all
+#   LOG_YEARS                — REQUIRED. Comma/space-separated years or
+#                              YYYY-YYYY ranges (e.g. "2023" or "2021-2024").
+#                              Each S3 input reads only objects dated in those
 #                              years. To load more years later, redeploy with
 #                              the longer list; years already loaded keep their
 #                              read position.
@@ -87,6 +87,14 @@ S3_CF_BUCKET_NAME="${S3_CF_BUCKET_NAME:-}"
 ENABLED_NODES="${ENABLED_NODES:-}"
 LOG_YEARS="${LOG_YEARS:-}"
 
+# Without a year list every S3 input re-reads the whole bucket history. Require an explicit list,
+# checked before any AWS call or repo change. Separators alone (", ") count as empty.
+if [ -z "${LOG_YEARS//[[:space:],]/}" ]; then
+  echo "ERROR: LOG_YEARS is required: the years to load, e.g. LOG_YEARS=\"2025\" or LOG_YEARS=\"2021-2025\"." >&2
+  echo "  See docs/operations.md 'Loading specific years'." >&2
+  exit 1
+fi
+
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 
 # The pdsops login PATH does not include /usr/local/bin, where the AWS CLI is installed.
@@ -120,7 +128,7 @@ else
   echo "CF Bucket: $S3_CF_BUCKET_NAME"
 fi
 echo "Enabled nodes: ${ENABLED_NODES:-all}"
-echo "Log years: ${LOG_YEARS:-all}"
+echo "Log years: $LOG_YEARS"
 echo ""
 
 # ----------------------------------------

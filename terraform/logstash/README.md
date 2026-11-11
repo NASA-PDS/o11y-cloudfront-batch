@@ -199,8 +199,8 @@ Prerequisites on the instance, outside this module's control:
    # Optional: node IDs to enable (example: "en"); empty enables all.
    ENABLED_NODES=""
 
-   # Optional: years to load (example: "2021-2022"); empty loads all years.
-   LOG_YEARS=""
+   # Required: years to load (example: "2021-2026"); the deploy exits when empty.
+   LOG_YEARS="2021-2026"
 
    # Optional: egress report recipients; empty skips the cron job.
    EGRESS_REPORT_RECIPIENTS=""

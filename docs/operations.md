@@ -27,12 +27,13 @@ tail -f /var/log/logstash/logstash-plain.log   # journalctl needs adm/wheel, whi
 
 After any stop, start, or restart, wait for the command to return (shutdown can take about a minute), then run the [smoke test](../terraform/logstash/README.md#3-smoke-test). Logstash starts again after an instance reboot.
 
-**Deploy (pull the latest config and restart).** The script clones or updates its own working copy at `/opt/o11y-cloudfront-batch`. Set these once per session; use a branch name in `REPO_BRANCH` to deploy something other than `main`:
+**Deploy (pull the latest config and restart).** The script clones or updates its own working copy at `/opt/o11y-cloudfront-batch`. Set these once per session; use a branch name in `REPO_BRANCH` to deploy something other than `main`. `LOG_YEARS` is required: the script exits without it (see [Loading specific years](#loading-specific-years)).
 
 ```bash
 REPO_BRANCH="main"
+LOG_YEARS="2021-2026"
 DEPLOY_URL="https://raw.githubusercontent.com/NASA-PDS/o11y-cloudfront-batch/${REPO_BRANCH}/scripts/logstash-deploy.sh"
-export REPO_BRANCH
+export REPO_BRANCH LOG_YEARS
 
 bash <(curl -fsSL "${DEPLOY_URL}")
 ```
@@ -55,7 +56,7 @@ bash <(curl -fsSL "${DEPLOY_URL}")
 
 ### Loading specific years
 
-`LOG_YEARS` (comma- or space-separated years or `YYYY-YYYY` ranges, e.g. `2023` or `2021-2024`) limits every S3 input to objects dated in those years; unset loads every year. It combines with `ENABLED_NODES`.
+`LOG_YEARS` (comma- or space-separated years or `YYYY-YYYY` ranges, e.g. `2023` or `2021-2024`) limits every S3 input to objects dated in those years. The deploy script requires it and exits with an error when it is unset or empty. It combines with `ENABLED_NODES`.
 
 ```bash
 LOG_YEARS="2021-2022"
@@ -71,8 +72,8 @@ How it works:
 
 - The build emits each `s3` input once per year, with an `exclude_pattern` that skips every key without a date in that year, and a per-year `sincedb_path`, `temporary_directory` and `id` (`..._<year>`). Dates are recognised as `YYYY-MM[-DD]`, `YYYYMMDD`, `YYMMDD` in `u_ex*`, `*log.*` and `*xferlog.*` names, and `year=YYYY/` or `/YYYY/` path segments.
 - A year is selected by the date in the object key, not by the event timestamps inside the file.
-- Objects with no date in the key (for example rotated `access_log.3.gz`) are skipped whenever `LOG_YEARS` is set.
-- Each year has its own sincedb, so adding a year reads only that year. Unsetting `LOG_YEARS` switches to the plain inputs, which keep their own sincedb files and do not know what the year inputs loaded: with no sincedb they re-read every year (documents are overwritten, not duplicated), and with an old one they resume from its timestamp. To finish a catch-up, list every year through the current one (for example `LOG_YEARS="2021-2026"`) instead of unsetting it, and add the new year each January.
+- Objects with no date in the key (for example rotated `access_log.3.gz`) are skipped.
+- Each year has its own sincedb, so adding a year reads only that year. To finish a catch-up, list every year through the current one (for example `LOG_YEARS="2021-2026"`) and add the new year each January.
 - Every input lists its prefix on each poll, so the number of inputs is the number of prefixes times the number of years. Keep the list to the years you need.
 - A year that is still receiving logs (CloudFront, the `weblogs/` prefixes) stops being ingested if it is not in the list.
 

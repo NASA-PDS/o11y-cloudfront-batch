@@ -5,6 +5,8 @@
 | `test_logstash_integration.py` | Runs `shared/pds-filter.conf` against sample input and checks event counts per output directory |
 | `test_logstash_log_years.py` | Runs the real input configs, built with `LOG_YEARS`, in Logstash against a fake S3 server (moto) and checks which objects are ingested |
 | `test_logstash_build_config.py` | `scripts/logstash_build_config.sh`, including `ENABLED_NODES`, `LOG_YEARS` and the year `exclude_pattern` |
+| `test_logstash_deploy.py` | `scripts/logstash-deploy.sh` exits before doing anything when `LOG_YEARS` is unset, empty or only separators |
+| `test_opensearch_template.py` | The index template maps `url.query_params` as a `flat_object` so query-parameter names cannot exhaust the field limit |
 | `test_sample_logs.py` | `copy-sample-logs` |
 | `test_s3_sync.py` | The deprecated `s3-log-sync` tool |
 | `test_egress_report.py` | `egress_report.py` |
