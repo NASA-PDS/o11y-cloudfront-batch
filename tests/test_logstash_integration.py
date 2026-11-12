@@ -66,8 +66,8 @@ class TestLogstashIntegration(unittest.TestCase):
             "template_errors": 0,
             "empty_user_agents": 1,  # line with "-" user-agent
             "duplicate_sources": 0,
-            # 200 OK + 404 (failure outcome, no special tag) + 3 /data/store/ organization lines
-            "processed_logs": 5,
+            # 200 OK + 404 (failure outcome, no special tag) + 4 /data/store/ organization lines
+            "processed_logs": 6,
             "corrupt_logs": 0,
         },
         "cloudfront-json": {
@@ -674,7 +674,8 @@ class TestLogstashIntegration(unittest.TestCase):
             },
         )
 
-        # /data/store/<node>/ sets the node (case-insensitive); anything else stays en
+        # /data/store/<node>/ sets the node (case-insensitive); anything else, including a bare
+        # /data/store/<node> without the trailing slash, stays en
         self.validate_cloudfront_organizations(
             output_dir,
             {
@@ -683,6 +684,7 @@ class TestLogstashIntegration(unittest.TestCase):
                 "203.0.113.42": "en",
                 "198.51.100.9": "en",
                 "198.51.100.10": "en",
+                "198.51.100.11": "en",
             },
         )
 
