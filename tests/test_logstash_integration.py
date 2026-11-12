@@ -66,7 +66,8 @@ class TestLogstashIntegration(unittest.TestCase):
             "template_errors": 0,
             "empty_user_agents": 1,  # line with "-" user-agent
             "duplicate_sources": 0,
-            "processed_logs": 2,  # 200 OK + 404 (failure outcome, no special tag)
+            # 200 OK + 404 (failure outcome, no special tag) + 5 /data/store/ organization lines
+            "processed_logs": 7,
             "corrupt_logs": 0,
         },
         "cloudfront-json": {
@@ -76,7 +77,8 @@ class TestLogstashIntegration(unittest.TestCase):
             "template_errors": 0,
             "empty_user_agents": 1,  # 403 record with cs(User-Agent) = "-"
             "duplicate_sources": 0,
-            "processed_logs": 2,  # 200 GET /portal/ + 302 GET with query string
+            # 200 GET /portal/ + 302 GET with query string + 2 /data/store/ organization lines
+            "processed_logs": 4,
             "corrupt_logs": 0,
         },
     }
@@ -590,6 +592,23 @@ class TestLogstashIntegration(unittest.TestCase):
             self.assertNotIn("duration", event.get("event", {}), "event.duration must not carry CloudFront timings")
             self.assertEqual(event.get("temp", {}), {}, "CloudFront staging fields must not be left in [temp]")
 
+    def validate_cloudfront_organizations(self, output_dir: Path, expected: Dict[str, str]):
+        """Verify organization.name of EN CloudFront events, which is derived from /data/store/<node>/ paths.
+
+        Args:
+            output_dir: Pipeline output directory.
+            expected: Per source address, the expected organization.name.
+        """
+        by_source = {e.get("source", {}).get("address"): e for e in self.load_processed_events(output_dir)}
+        for address, organization in expected.items():
+            self.assertIn(address, by_source, f"Expected a processed CloudFront event for {address}")
+            event = by_source[address]
+            self.assertEqual(
+                event.get("organization", {}).get("name"),
+                organization,
+                f"organization.name for {address} ({event.get('url', {}).get('path')})",
+            )
+
     def test_https_log_processing(self):
         """Test processing of HTTPS logs."""
         if "https" not in self.ENABLED_CONFIGS:
@@ -655,6 +674,21 @@ class TestLogstashIntegration(unittest.TestCase):
             },
         )
 
+        # /data/store/<node>/ sets the node (lower case, like the dashboard prefixes); anything else,
+        # including a bare /data/store/<node> or an upper-case folder, stays en
+        self.validate_cloudfront_organizations(
+            output_dir,
+            {
+                "198.51.100.194": "img",
+                "198.51.100.8": "sbn",
+                "203.0.113.42": "en",
+                "198.51.100.9": "en",
+                "198.51.100.10": "en",
+                "198.51.100.11": "en",
+                "198.51.100.12": "en",
+            },
+        )
+
     def test_cloudfront_json_log_processing(self):
         """Test processing of CloudFront JSON Standard Logging v2 logs."""
         if "cloudfront-json" not in self.ENABLED_CONFIGS:
@@ -686,6 +720,16 @@ class TestLogstashIntegration(unittest.TestCase):
                     "time_taken_ms": 1.0,
                     "time_to_first_byte_ms": 1.0,
                 },
+            },
+        )
+
+        # /data/store/<node>/ sets the node; anything else stays en
+        self.validate_cloudfront_organizations(
+            output_dir,
+            {
+                "198.51.100.42": "en",
+                "198.51.100.43": "ppi",
+                "198.51.100.44": "en",
             },
         )
 
