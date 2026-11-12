@@ -126,7 +126,7 @@ config/logstash/config/
 | `http.response.substatus` | IIS sub-status code, e.g. `6` for a `404.6` response (IIS web events only) |
 | `user_agent.original` | User agent string |
 | `event.start` | Request timestamp |
-| `organization.name` | Node ID (set by the input) |
+| `organization.name` | Node ID (set by the input). EN CloudFront requests for `/data/store/<node>/...` (`atm`, `geo`, `img`, `naif`, `ppi`, `rings`, `sbn`) get that node; other EN CloudFront requests keep `en` |
 | `event.dataset` | Source, e.g. `en.http`, `naif.ftp` |
 | `aws.cloudfront.result_type`, `.response_result_type`, `.detailed_result_type` | CloudFront cache result, e.g. `Hit`, `Miss`, `Error` (CloudFront events only) |
 | `aws.cloudfront.edge_location` | CloudFront edge location, e.g. `FRA56-P2` (CloudFront events only) |

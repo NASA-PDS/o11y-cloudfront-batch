@@ -20,14 +20,16 @@ Prefixes come from the PDS node archive base paths (a crawl of the node websites
 
 | `organization.name` | `url.path` prefixes | Base URLs (standard, layout) |
 |---|---|---|
-| `atm` | `/PDS/data/`, `/PDS/data/PDS4/` | `https://pds-atmospheres.nmsu.edu/PDS/data/` (PDS3, by volume or dataset); `.../PDS/data/PDS4/` (PDS4, by mission) |
-| `en` | `/data/store`, `/data/pds4/` | `https://pds.nasa.gov/data/pds4/` (PDS4, by bundle). `/data/store` is not in the base-path list. |
-| `geo` | `/earth/`, `/mro/`, `/m2020/`, `/msl/`, `/messenger/`, `/mgn/`, `/premgn/`, `/grail/`, `/lro/`, `/lunar/`, `/insight/`, `/mer/`, `/mex/`, `/ody/`, `/mgs/`, `/radiosciencedocs/` | `https://pds-geosciences.wustl.edu/<mission>/` (PDS3 and PDS4, by mission) for each prefix |
-| `img` | `/img/data/`, `/data/` | `https://planetarydata.jpl.nasa.gov/img/data/` (PDS3 and PDS4, by mission or volume); `https://pds-imaging.jpl.nasa.gov/data/` (PDS3 and PDS4, by mission) |
-| `naif` | `/pub/naif/pds/`, `/pub/naif/pds/data/`, `/pub/naif/pds/pds4/` | `https://naif.jpl.nasa.gov/pub/naif/pds/data/` (PDS3, by dataset ID); `.../pds/pds4/` (PDS4, by mission). The first prefix also covers the other folders under `pds/` (`MPF/`, `doc/`, `misc/`, `wgc/`). |
-| `ppi` | `/data/` | `https://pds-ppi.igpp.ucla.edu/data/` (PDS3 and PDS4, one flat directory of bundle and dataset IDs) |
-| `rings` | `/pds4/bundles/`, `/pds4/archives-bundles/`, `/holdings/volumes/` | `https://pds-rings.seti.org/pds4/bundles/` (PDS4, by bundle); `.../pds4/archives-bundles/` (PDS4 tar.gz archives); `.../holdings/volumes/` (PDS3, by volume set) |
-| `sbn` | `/pds4/`, `/pds3/`, `/holdings/` | `https://sbnarchive.psi.edu/pds4/` (PDS4) and `.../pds3/` (PDS3); `https://pds-smallbodies.astro.umd.edu/holdings/` (PDS3 and PDS4, flat, by bundle) |
+| `atm` | `/PDS/data/`, `/PDS/data/PDS4/`, `/data/store/atm/` | `https://pds-atmospheres.nmsu.edu/PDS/data/` (PDS3, by volume or dataset); `.../PDS/data/PDS4/` (PDS4, by mission) |
+| `en` | `/data/store`, `/data/pds4/` | `https://pds.nasa.gov/data/pds4/` (PDS4, by bundle). `/data/store` is not in the base-path list; it matches `/data/store/en/` and any `/data/store/` folder that is not a node. |
+| `geo` | `/earth/`, `/mro/`, `/m2020/`, `/msl/`, `/messenger/`, `/mgn/`, `/premgn/`, `/grail/`, `/lro/`, `/lunar/`, `/insight/`, `/mer/`, `/mex/`, `/ody/`, `/mgs/`, `/radiosciencedocs/`, `/data/store/geo/` | `https://pds-geosciences.wustl.edu/<mission>/` (PDS3 and PDS4, by mission) for each prefix |
+| `img` | `/img/data/`, `/data/`, `/data/store/img/` | `https://planetarydata.jpl.nasa.gov/img/data/` (PDS3 and PDS4, by mission or volume); `https://pds-imaging.jpl.nasa.gov/data/` (PDS3 and PDS4, by mission) |
+| `naif` | `/pub/naif/pds/`, `/pub/naif/pds/data/`, `/pub/naif/pds/pds4/`, `/data/store/naif/` | `https://naif.jpl.nasa.gov/pub/naif/pds/data/` (PDS3, by dataset ID); `.../pds/pds4/` (PDS4, by mission). The first prefix also covers the other folders under `pds/` (`MPF/`, `doc/`, `misc/`, `wgc/`). |
+| `ppi` | `/data/`, `/data/store/ppi/` | `https://pds-ppi.igpp.ucla.edu/data/` (PDS3 and PDS4, one flat directory of bundle and dataset IDs) |
+| `rings` | `/pds4/bundles/`, `/pds4/archives-bundles/`, `/holdings/volumes/`, `/data/store/rings/` | `https://pds-rings.seti.org/pds4/bundles/` (PDS4, by bundle); `.../pds4/archives-bundles/` (PDS4 tar.gz archives); `.../holdings/volumes/` (PDS3, by volume set) |
+| `sbn` | `/pds4/`, `/pds3/`, `/holdings/`, `/data/store/sbn/` | `https://sbnarchive.psi.edu/pds4/` (PDS4) and `.../pds3/` (PDS3); `https://pds-smallbodies.astro.umd.edu/holdings/` (PDS3 and PDS4, flat, by bundle) |
+
+EN's CloudFront distribution also serves each node's archive downloads under `https://pds.mcp.nasa.gov/data/store/<node>/`. The pipeline sets `organization.name` to that node for those requests ([Data processing](../../README.md#data-processing)), so every node has a `/data/store/<node>/` prefix.
 
 Some prefixes are not confirmed against live data. The crawl could not reach every host, and a few paths (SBN `/pds3/`, IMG `/data/`) are from prior knowledge or are likely aliases. Confirm each prefix against `url.path` values in OpenSearch before relying on it.
 
