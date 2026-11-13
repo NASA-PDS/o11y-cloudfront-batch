@@ -12,6 +12,10 @@ PUT _index_template/pds-o11y-cloudfront-batch
 
 Verify with `GET _index_template/pds-o11y-cloudfront-batch`. A template applies to new indices only; existing indices keep their mappings.
 
+## Query parameters
+
+`url.query_params` is a `flat_object`: the whole object is one mapped field however many distinct parameter names the logs contain, so scanner traffic with random names cannot exhaust the index's `total_fields` limit. Query a parameter by its path (`url.query_params.target: "lucy"`). The subfields are not listed in the index pattern and cannot be used in aggregations; use `url.query_parts` (`key=value` strings) to filter or aggregate on a parameter.
+
 ## Regenerate from ECS
 
 The file is the ECS `v8.17.0` legacy template with OpenSearch adjustments.

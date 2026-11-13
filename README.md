@@ -149,7 +149,7 @@ Each node has one pipeline, built from `inputs/pds-input-s3-<node>.conf`.
 | RINGS | `rings/` | pds-rings.seti.org, opus.pds-rings.seti.org | `rings.http` |
 | SBN | `sbn/` | sbn.psi.edu, sbnapps.psi.edu, pds-smallbodies.astro.umd.edu | `sbn.http` |
 
-EN polls every 15 minutes; the other nodes every 2 hours. Set `LOG_YEARS` to load only some years of the backlog ([runbook](docs/operations.md#loading-specific-years)).
+EN polls every 15 minutes; the other nodes every 2 hours. `LOG_YEARS` selects which years of the backlog to load and is required by the deploy script ([runbook](docs/operations.md#loading-specific-years)).
 
 ## S3 log sync (deprecated)
 
