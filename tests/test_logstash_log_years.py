@@ -49,7 +49,7 @@ GEO_IIS_HOSTS = [
 
 # One object per input prefix and per date shape, with the year as {year} (YYYY) and {yy} (YY).
 _OTHER_NODE_KEY_TEMPLATES = [
-    "geo/geo-ode-mapserver/u_ex{yy}0601mars2a.log.gz",
+    "geo/legacy/geo-ode-mapserver/{year}/06/u_ex{yy}0601mars2a.log.gz",
     "geo/weblogs/geo-apache/geoweb.rsl.wustl.edu/{year}/10/access.log-{year}-10-22.gz",
     "atm/atm-apache-http/atm-atmos-apache.{year}-05-01.txt.gz",
     "atm/all/atm-atmos-ftp.{year}-07-01.gz",
@@ -68,7 +68,7 @@ _OTHER_NODE_KEY_TEMPLATES = [
 ]
 # The GEO legacy prefixes share one file name and so do the GEO IIS hosts, as in the real buckets.
 NODE_KEY_TEMPLATES = (
-    [f"geo/geo-{name}/u_ex{{yy}}0101.log.gz" for name in ("an", "ode", "pds", "speclib", "va")]
+    [f"geo/legacy/geo-{name}/{{year}}/01/u_ex{{yy}}0101.log.gz" for name in ("an", "ode", "pds", "speclib", "va")]
     + [f"geo/weblogs/geo-iis/{host}/{{year}}/10/u_ex{{yy}}1001.log.gz" for host in GEO_IIS_HOSTS]
     + _OTHER_NODE_KEY_TEMPLATES
 )

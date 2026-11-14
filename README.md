@@ -142,7 +142,7 @@ Each node has one pipeline, built from `inputs/pds-input-s3-<node>.conf`.
 |---|---|---|---|
 | ATM | `atm/atm-apache-http/`, `atm/atm-atmos-ftp/`, `atm/all/` | pds-atmospheres.nmsu.edu | `atm.http`, `atm.ftp` |
 | EN | `eng/en/`; CloudFront bucket: `pdc-cds-infra/cloudfront/access/{json,w3c}/pds-main/`, `.../w3c/portal-legacy/` | pds.nasa.gov, pds.mcp.nasa.gov | `en.http`, `en.cloudfront.main`, `en.cloudfront.legacy` |
-| GEO | `geo/geo-*` and `geo/weblogs/{geo-iis,geo-apache}/<host>/` | pds-geosciences.wustl.edu, an.rsl.wustl.edu, ode.rsl.wustl.edu, pds-speclib.rsl.wustl.edu | `geo.http`, `geo.ftp` |
+| GEO | `geo/legacy/geo-*/<YYYY>/<MM>/` and `geo/weblogs/{geo-iis,geo-apache}/<host>/` | pds-geosciences.wustl.edu, an.rsl.wustl.edu, ode.rsl.wustl.edu, pds-speclib.rsl.wustl.edu | `geo.http`, `geo.ftp` |
 | IMG | `img/` | pds-imaging.jpl.nasa.gov | `img.http` |
 | NAIF | `naif/naif-httpdlogs`, `naif/naif-xferlogs`, `naif/weblogs/naif-apache/` | naif.jpl.nasa.gov, pds-naif.jpl.nasa.gov | `naif.http`, `naif.ftp` |
 | PPI | `ppi/` | pds-ppi.igpp.ucla.edu | `ppi.http` |

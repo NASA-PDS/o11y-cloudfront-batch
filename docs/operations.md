@@ -87,6 +87,33 @@ rm -f /var/lib/logstash/plugins/inputs/s3/sincedb_file_input_${NODE}*
 systemctl --user start logstash
 ```
 
+### Legacy log layout
+
+Logs uploaded before the Data Upload Manager are flat, one file per day, directly under the source prefix (for GEO, `geo/geo-an/u_ex210105.log.gz`). They are kept apart from the `weblogs/` layout under `<node>/legacy/<source>/<YYYY>/<MM>/`, for example `geo/legacy/geo-an/2021/01/u_ex210105.log.gz`. A year or month can then be listed, re-ingested or deleted by prefix. The GEO inputs read `geo/legacy/geo-*/`.
+
+`scripts/s3-reorganize-legacy-logs.py` moves a source into this layout. It takes the year and month from the file name, copies each object, checks size and ETag, and only then deletes the original. The default is a dry run. Files with no date in the name, or in a subdirectory, are listed and left in place. `<node>/weblogs/` is never touched.
+
+```bash
+BUCKET="<node-logs-bucket>"
+PROFILE="<aws-profile>"
+SOURCES="geo-ode-cart geo-speclib"
+
+# Dry run: per-year counts and anything that would be left alone
+python3 scripts/s3-reorganize-legacy-logs.py --bucket "${BUCKET}" --node geo --source ${SOURCES} --profile "${PROFILE}"
+
+# Copy one year and keep the originals, with a record of every key
+python3 scripts/s3-reorganize-legacy-logs.py --bucket "${BUCKET}" --node geo --source ${SOURCES} --year 2021 \
+  --keep-source --manifest /tmp/legacy-2021.tsv --profile "${PROFILE}" --execute
+
+# Move everything (copy, verify, delete); a rerun skips objects already copied
+python3 scripts/s3-reorganize-legacy-logs.py --bucket "${BUCKET}" --node geo --source ${SOURCES} \
+  --profile "${PROFILE}" --execute
+```
+
+- Move every source of a node before deploying inputs that read `<node>/legacy/`. An input finds nothing under a prefix that has not been filled yet.
+- A copy has a new `LastModified`, so an input that already has a sincedb reads the moved objects again. Documents are overwritten, not duplicated (see [Re-ingest from S3](#re-ingest-from-s3)).
+- The bucket is versioned, so a deleted original stays recoverable until the noncurrent-version lifecycle rule expires it. Space is freed after that.
+
 ### Daily egress report
 
 > **WARNING: the egress report (`scripts/egress_report.py`, `src/pds/o11y_batch/egress_report.py`) has not been tested end to end and is not known to work. Validate it before relying on it.**

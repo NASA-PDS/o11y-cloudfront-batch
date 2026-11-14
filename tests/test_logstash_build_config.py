@@ -18,9 +18,9 @@ S3_BLOCK = re.compile(r"^  s3 \{\n(.*?)^  \}$", re.MULTILINE | re.DOTALL)
 
 # Keys in the shapes found in the prod buckets, grouped by the year they belong to.
 KEYS_2023 = [
-    "geo/geo-an/u_ex230101.log.gz",
-    "geo/geo-ftp/u_ex230101web4pp.log.gz",
-    "geo/geo-ode-mapserver/u_ex230601mars2a.log.gz",
+    "geo/legacy/geo-an/2023/01/u_ex230101.log.gz",
+    "geo/legacy/geo-ftp/2023/01/u_ex230101web4pp.log.gz",
+    "geo/legacy/geo-ode-mapserver/2023/06/u_ex230601mars2a.log.gz",
     "geo/weblogs/geo-iis/ode.rsl.wustl.edu/2023/10/u_ex231001.log.gz",
     "geo/weblogs/geo-apache/geoweb.rsl.wustl.edu/2023/10/access.log-2023-10-22.gz",
     "atm/atm-apache-http/atm-atmos-apache.2023-05-01.txt.gz",
@@ -44,9 +44,9 @@ KEYS_2023 = [
     "pdc-cds-infra/cloudfront/access/json/pds-main/year=2023/month=07/day=17/EDISTRIBUTIONID.2023-07-17-21.d7397384.gz",
 ]
 KEYS_OTHER_YEARS = [
-    "geo/geo-an/u_ex220101.log.gz",
-    "geo/geo-an/u_ex240523.log.gz",
-    "geo/geo-ode-mapserver/u_ex24122bm1ms.log.gz",
+    "geo/legacy/geo-an/2022/01/u_ex220101.log.gz",
+    "geo/legacy/geo-an/2024/05/u_ex240523.log.gz",
+    "geo/legacy/geo-ode-mapserver/2024/12/u_ex241222bm1ms.log.gz",
     "geo/weblogs/geo-iis/ode.rsl.wustl.edu/2025/10/u_ex251001.log.gz",
     "geo/weblogs/geo-apache/geoweb.rsl.wustl.edu/2026/10/access.log-2026-10-13.gz",
     "atm/atm-apache-http/atm-atmos-apache.2022-05-01.txt.gz",
@@ -261,10 +261,10 @@ class TestLogstashBuildConfig(unittest.TestCase):
         """Two-digit YYMMDD names map to the right year, including the 2020s decade boundary."""
         pattern_2021 = re.compile(self.year_pattern(2021))
         pattern_2025 = re.compile(self.year_pattern(2025))
-        self.assertIsNone(pattern_2021.search("geo/geo-an/u_ex210101.log.gz"))
-        self.assertIsNotNone(pattern_2021.search("geo/geo-an/u_ex250101.log.gz"))
-        self.assertIsNone(pattern_2025.search("geo/geo-an/u_ex250930.log.gz"))
-        self.assertIsNotNone(pattern_2025.search("geo/geo-an/u_ex210101.log.gz"))
+        self.assertIsNone(pattern_2021.search("geo/legacy/geo-an/2021/01/u_ex210101.log.gz"))
+        self.assertIsNotNone(pattern_2021.search("geo/legacy/geo-an/2025/01/u_ex250101.log.gz"))
+        self.assertIsNone(pattern_2025.search("geo/legacy/geo-an/2025/09/u_ex250930.log.gz"))
+        self.assertIsNotNone(pattern_2025.search("geo/legacy/geo-an/2021/01/u_ex210101.log.gz"))
 
     def test_img_junk_is_excluded_without_log_years_and_combined_with_them(self):
         """IMG skips undated and temp files on its own, and the year filter is OR-ed on top."""
