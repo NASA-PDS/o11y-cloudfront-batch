@@ -12,7 +12,8 @@ xferlog.YYMMDD, YYYY-MM[-DD] and YYYYMMDD). The Data Upload Manager layout under
 NODE/weblogs/ is never read or written.
 
 The default is a dry run that lists the plan and writes nothing. With --execute
-each object is copied server-side, the copy is verified (size and ETag), and the
+each object is copied server-side, the copy is verified (size and ETag, or size and
+full-object checksum for objects uploaded in parts), and the
 source is then deleted. The bucket is versioned, so a deleted source stays
 recoverable until the noncurrent-version lifecycle rule expires it. Use
 --keep-source to copy without deleting. Objects that already exist at the
@@ -58,6 +59,8 @@ DEFAULT_WORKERS = 8
 RESERVED_NAMES = ("weblogs",)  # prefixes owned by the Data Upload Manager layout
 MAX_COPY_BYTES = 5 * 1024**3  # largest object a single copy_object call can copy
 NOT_FOUND_CODES = ("404", "NoSuchKey", "NotFound")
+CHECKSUM_ALGORITHM = "CRC64NVME"  # full-object checksum S3 computes for copies of multipart objects
+FULL_OBJECT_CHECKSUMS = ("ChecksumCRC64NVME", "ChecksumCRC32", "ChecksumCRC32C", "ChecksumSHA256", "ChecksumSHA1")
 EXAMPLES_PER_REASON = 5
 
 # (pattern, year is two digits). Group 1 is the year and group 2 the month.
@@ -150,6 +153,8 @@ def plan_source(
             skipped.append((obj.key, "folder marker"))
         elif "/" in name:
             skipped.append((obj.key, "in a subdirectory"))
+        elif name.startswith("."):
+            skipped.append((obj.key, "hidden file"))
         elif obj.size > MAX_COPY_BYTES:
             skipped.append((obj.key, "larger than 5 GiB"))
         else:
@@ -180,9 +185,35 @@ def head_object(client: Any, bucket: str, key: str) -> Optional[Dict[str, Any]]:
         raise
 
 
-def matches_source(meta: Dict[str, Any], source: SourceObject) -> bool:
-    """Whether an object's metadata has the size and ETag of the source object."""
-    return meta["ContentLength"] == source.size and meta["ETag"].strip('"') == source.etag
+def is_multipart(source: SourceObject) -> bool:
+    """Whether the object was uploaded in parts; a copy of it cannot have the same ETag."""
+    return "-" in source.etag
+
+
+def full_object_checksum(client: Any, bucket: str, key: str) -> Optional[str]:
+    """Return the object's full-object checksum as "<algorithm>:<value>", or None when it has none."""
+    meta = client.head_object(Bucket=bucket, Key=key, ChecksumMode="ENABLED")
+    if meta.get("ChecksumType") != "FULL_OBJECT":
+        return None
+    for name in FULL_OBJECT_CHECKSUMS:
+        if meta.get(name):
+            return f"{name}:{meta[name]}"
+    return None
+
+
+def matches_source(client: Any, bucket: str, meta: Dict[str, Any], move: Move) -> bool:
+    """Whether the destination's metadata matches the source object.
+
+    A single-part source must have the same size and ETag. A multipart source must have the same size
+    and the same full-object checksum, which S3 recomputes for the copy; one without a checksum never matches.
+    """
+    source = move.source
+    if meta["ContentLength"] != source.size:
+        return False
+    if not is_multipart(source):
+        return bool(meta["ETag"].strip('"') == source.etag)
+    expected = full_object_checksum(client, bucket, source.key)
+    return expected is not None and expected == full_object_checksum(client, bucket, move.dest_key)
 
 
 def move_object(client: Any, bucket: str, move: Move, keep_source: bool) -> str:
@@ -198,12 +229,15 @@ def move_object(client: Any, bucket: str, move: Move, keep_source: bool) -> str:
     """
     existing = head_object(client, bucket, move.dest_key)
     if existing is None:
-        client.copy_object(CopySource={"Bucket": bucket, "Key": move.source.key}, Bucket=bucket, Key=move.dest_key)
+        extra = {"ChecksumAlgorithm": CHECKSUM_ALGORITHM} if is_multipart(move.source) else {}
+        client.copy_object(
+            CopySource={"Bucket": bucket, "Key": move.source.key}, Bucket=bucket, Key=move.dest_key, **extra
+        )
         copied = head_object(client, bucket, move.dest_key)
-        if copied is None or not matches_source(copied, move.source):
+        if copied is None or not matches_source(client, bucket, copied, move):
             raise CopyVerificationError(f"{move.dest_key} does not match {move.source.key}; source left in place")
         outcome = "copied" if keep_source else "moved"
-    elif matches_source(existing, move.source):
+    elif matches_source(client, bucket, existing, move):
         outcome = "already present"
     else:
         raise DestinationConflictError(f"{move.dest_key} exists and differs from {move.source.key}; left alone")

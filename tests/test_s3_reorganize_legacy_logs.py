@@ -23,22 +23,32 @@ def obj(key: str, size: int = 10, etag: str = "abc") -> Any:
 
 
 class FakeS3:
-    """The head, copy and delete calls of an S3 client, over a dict of key -> (size, etag)."""
+    """The head, copy and delete calls of an S3 client, over a dict of key -> (size, etag[, checksum]).
+
+    As in S3, a copy of a multipart object gets a plain ETag and only has a checksum when one was requested.
+    """
 
     def __init__(self, objects: Dict[str, Any], corrupt_copies: bool = False) -> None:
         self.objects = dict(objects)
         self.corrupt_copies = corrupt_copies
         self.deleted: List[str] = []
+        self.copy_checksum_requests: List[Any] = []
 
-    def head_object(self, Bucket: str, Key: str) -> Dict[str, Any]:
+    def head_object(self, Bucket: str, Key: str, ChecksumMode: Any = None) -> Dict[str, Any]:
         if Key not in self.objects:
             raise ClientError({"Error": {"Code": "404", "Message": "Not Found"}}, "HeadObject")
-        size, etag = self.objects[Key]
-        return {"ContentLength": size, "ETag": f'"{etag}"'}
+        size, etag, *rest = self.objects[Key]
+        meta: Dict[str, Any] = {"ContentLength": size, "ETag": f'"{etag}"'}
+        if rest and rest[0] and ChecksumMode == "ENABLED":
+            meta.update({"ChecksumType": "FULL_OBJECT", "ChecksumCRC64NVME": rest[0]})
+        return meta
 
-    def copy_object(self, CopySource: Dict[str, str], Bucket: str, Key: str) -> None:
-        size, etag = self.objects[CopySource["Key"]]
-        self.objects[Key] = (size + 1, etag) if self.corrupt_copies else (size, etag)
+    def copy_object(self, CopySource: Dict[str, str], Bucket: str, Key: str, ChecksumAlgorithm: Any = None) -> None:
+        size, etag, *rest = self.objects[CopySource["Key"]]
+        self.copy_checksum_requests.append(ChecksumAlgorithm)
+        checksum = rest[0] if rest and ChecksumAlgorithm else None
+        new_etag = "plain-md5" if "-" in etag else etag
+        self.objects[Key] = (size + 1 if self.corrupt_copies else size, new_etag, checksum)
 
     def delete_object(self, Bucket: str, Key: str) -> None:
         self.deleted.append(Key)
@@ -87,6 +97,13 @@ class PlanSourceTest(unittest.TestCase):
             [reason for _, reason in plan.skipped],
             ["folder marker", "no date in the file name", "in a subdirectory", "larger than 5 GiB"],
         )
+
+    def test_hidden_files_are_reported_not_moved(self) -> None:
+        plan = rl.plan_source(
+            [obj("img/img-pdsimg2-http/.access_log-20241015.lxNDxM.gz")], "img", "img-pdsimg2-http", "legacy"
+        )
+        self.assertEqual(plan.moves, [])
+        self.assertEqual([reason for _, reason in plan.skipped], ["hidden file"])
 
     def test_year_filter(self) -> None:
         objects = [obj("geo/geo-an/u_ex201231.log.gz"), obj("geo/geo-an/u_ex210101.log.gz")]
@@ -149,6 +166,44 @@ class MoveObjectTest(unittest.TestCase):
             rl.move_object(client, BUCKET, self.move(), keep_source=False)
         self.assertEqual(client.deleted, [])
         self.assertIn(self.SRC, client.objects)
+
+
+class MultipartMoveTest(unittest.TestCase):
+    SRC = "ppi/ppi-tomcat/pds-ppi_2021-01.log.gz"
+    DEST = "ppi/legacy/ppi-tomcat/2021/01/pds-ppi_2021-01.log.gz"
+
+    def move(self) -> Any:
+        return rl.plan_source([obj(self.SRC, size=10, etag="abc-15")], "ppi", "ppi-tomcat", "legacy").moves[0]
+
+    def test_multipart_object_is_verified_by_checksum(self) -> None:
+        client = FakeS3({self.SRC: (10, "abc-15", "crc")})
+        self.assertEqual(rl.move_object(client, BUCKET, self.move(), keep_source=False), "moved")
+        self.assertEqual(client.copy_checksum_requests, ["CRC64NVME"])
+        self.assertEqual(list(client.objects), [self.DEST])
+
+    def test_single_part_object_does_not_request_a_checksum(self) -> None:
+        client = FakeS3({"geo/geo-an/u_ex210105.log.gz": (10, "abc", "crc")})
+        move = rl.plan_source([obj("geo/geo-an/u_ex210105.log.gz")], "geo", "geo-an", "legacy").moves[0]
+        rl.move_object(client, BUCKET, move, keep_source=True)
+        self.assertEqual(client.copy_checksum_requests, [None])
+
+    def test_multipart_object_without_a_checksum_is_not_deleted(self) -> None:
+        client = FakeS3({self.SRC: (10, "abc-15")})
+        with self.assertRaises(rl.CopyVerificationError):
+            rl.move_object(client, BUCKET, self.move(), keep_source=False)
+        self.assertEqual(client.deleted, [])
+        self.assertIn(self.SRC, client.objects)
+
+    def test_identical_multipart_destination_is_not_copied_again(self) -> None:
+        client = FakeS3({self.SRC: (10, "abc-15", "crc"), self.DEST: (10, "plain-md5", "crc")})
+        self.assertEqual(rl.move_object(client, BUCKET, self.move(), keep_source=False), "already present")
+        self.assertEqual(client.copy_checksum_requests, [])
+
+    def test_multipart_destination_with_a_different_checksum_is_a_conflict(self) -> None:
+        client = FakeS3({self.SRC: (10, "abc-15", "crc"), self.DEST: (10, "plain-md5", "other")})
+        with self.assertRaises(rl.DestinationConflictError):
+            rl.move_object(client, BUCKET, self.move(), keep_source=False)
+        self.assertEqual(client.deleted, [])
 
 
 class ExecuteMovesTest(unittest.TestCase):
