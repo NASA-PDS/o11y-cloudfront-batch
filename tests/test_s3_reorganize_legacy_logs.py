@@ -1,4 +1,5 @@
 """Unit tests for scripts/s3-reorganize-legacy-logs.py."""
+import argparse
 import importlib.util
 import unittest
 from pathlib import Path
@@ -110,6 +111,56 @@ class PlanSourceTest(unittest.TestCase):
         plan = rl.plan_source(objects, "geo", "geo-an", "legacy", year=2021)
         self.assertEqual([m.year for m in plan.moves], [2021])
         self.assertEqual(plan.skipped, [])
+
+
+class RouteTest(unittest.TestCase):
+    ROUTES = [rl.route_type("atm-atmos-apache=atm-apache-http"), rl.route_type("atm-atmos-ftp=atm-atmos-ftp")]
+
+    def test_files_of_a_mixed_directory_go_to_their_own_source(self) -> None:
+        objects = [obj("atm/all/atm-atmos-apache.2025-06-01.txt.gz"), obj("atm/all/atm-atmos-ftp.2025-07-01.gz")]
+        plan = rl.plan_source(objects, "atm", "all", "legacy", routes=self.ROUTES)
+        self.assertEqual(
+            [m.dest_key for m in plan.moves],
+            [
+                "atm/legacy/atm-apache-http/2025/06/atm-atmos-apache.2025-06-01.txt.gz",
+                "atm/legacy/atm-atmos-ftp/2025/07/atm-atmos-ftp.2025-07-01.gz",
+            ],
+        )
+
+    def test_a_file_matching_no_route_is_left_alone(self) -> None:
+        plan = rl.plan_source([obj("atm/all/other-2025-06-01.gz")], "atm", "all", "legacy", routes=self.ROUTES)
+        self.assertEqual(plan.moves, [])
+        self.assertEqual([reason for _, reason in plan.skipped], ["matches no --route"])
+
+    def test_without_routes_files_keep_their_source_directory(self) -> None:
+        plan = rl.plan_source(
+            [obj("atm/atm-apache-http/atm-atmos-apache.2025-06-01.txt.gz")], "atm", "atm-apache-http", "legacy"
+        )
+        self.assertEqual(
+            plan.moves[0].dest_key, "atm/legacy/atm-apache-http/2025/06/atm-atmos-apache.2025-06-01.txt.gz"
+        )
+
+    def test_route_text_must_have_a_pattern_and_a_destination(self) -> None:
+        for bad in ("nodest", "=dest", "pattern=", "([unclosed=dest"):
+            with self.assertRaises(argparse.ArgumentTypeError, msg=bad):
+                rl.route_type(bad)
+
+    def test_a_route_cannot_point_at_weblogs_or_leave_the_node(self) -> None:
+        base = ["--bucket", BUCKET, "--node", "atm", "--source", "all"]
+        self.assertIsNotNone(rl.validate_names(rl.parse_args([*base, "--route", "x=weblogs"])))
+        self.assertIsNotNone(rl.validate_names(rl.parse_args([*base, "--route", "x=a/b"])))
+        self.assertIsNone(rl.validate_names(rl.parse_args([*base, "--route", "x=atm-apache-http"])))
+
+    def test_two_objects_with_one_destination_are_reported(self) -> None:
+        first = rl.plan_source(
+            [obj("atm/all/atm-atmos-apache.2025-06-01.txt.gz")], "atm", "all", "legacy", routes=self.ROUTES
+        )
+        second = rl.plan_source(
+            [obj("atm/atm-apache-http/atm-atmos-apache.2025-06-01.txt.gz")], "atm", "atm-apache-http", "legacy"
+        )
+        clashes = rl.duplicate_destinations(first.moves + second.moves)
+        self.assertEqual(clashes, ["atm/legacy/atm-apache-http/2025/06/atm-atmos-apache.2025-06-01.txt.gz"])
+        self.assertEqual(rl.duplicate_destinations(first.moves), [])
 
 
 class ValidateNamesTest(unittest.TestCase):

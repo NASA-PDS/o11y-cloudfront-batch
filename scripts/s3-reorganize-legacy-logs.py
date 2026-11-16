@@ -21,8 +21,14 @@ destination with the same size and ETag are not copied again, so an interrupted
 run can be repeated. A destination that differs from its source is reported and
 left alone.
 
-Files with no recognisable date, or in a subdirectory of the source, are
-reported and left where they are.
+Files with no recognisable date, hidden files, or files in a subdirectory of the
+source, are reported and left where they are.
+
+A directory that holds the logs of several sources is split with --route
+REGEX=DEST: a file whose name matches REGEX goes under DEST instead of the
+source directory, and a file that matches no route is left alone. If two objects
+would land on the same key, the run stops before copying anything; move the
+sources in separate runs so a differing destination is reported, not overwritten.
 
 Copies get a new LastModified. A Logstash s3 input reads objects newer than its
 sincedb timestamp, so point the inputs at the new prefix and set their sincedb
@@ -83,6 +89,9 @@ class CopyVerificationError(ReorganizeError):
     """The copy does not match the source object."""
 
 
+Route = Tuple["re.Pattern[str]", str]  # (file-name pattern, destination source directory)
+
+
 @dataclass(frozen=True)
 class SourceObject:
     """An object found under a source prefix."""
@@ -132,8 +141,26 @@ def destination_key(node: str, legacy: str, source: str, year: int, month: int, 
     return f"{node}/{legacy}/{source}/{year:04d}/{month:02d}/{name}"
 
 
+def route_for(name: str, source: str, routes: Sequence[Route]) -> Optional[str]:
+    """Return the destination source directory for a file name: the first matching route, or the source itself.
+
+    Without routes every file keeps its source directory. With routes a file that matches none has no destination.
+    """
+    if not routes:
+        return source
+    for pattern, dest_source in routes:
+        if pattern.search(name):
+            return dest_source
+    return None
+
+
 def plan_source(
-    objects: Iterable[SourceObject], node: str, source: str, legacy: str, year: Optional[int] = None
+    objects: Iterable[SourceObject],
+    node: str,
+    source: str,
+    legacy: str,
+    year: Optional[int] = None,
+    routes: Sequence[Route] = (),
 ) -> Plan:
     """Decide where each object under NODE/SOURCE/ moves.
 
@@ -143,12 +170,15 @@ def plan_source(
         source: Directory under the node prefix, for example geo-an.
         legacy: Name of the directory the moved logs go under.
         year: When set, only objects dated in this year are planned.
+        routes: (pattern, destination source) pairs that send files of a mixed directory to the source
+            directory named by the first pattern that matches the file name.
     """
     prefix = f"{node}/{source}/"
     moves: List[Move] = []
     skipped: List[Tuple[str, str]] = []
     for obj in objects:
         name = obj.key[len(prefix) :]
+        dest_source = route_for(name, source, routes)
         if not name:
             skipped.append((obj.key, "folder marker"))
         elif "/" in name:
@@ -157,13 +187,21 @@ def plan_source(
             skipped.append((obj.key, "hidden file"))
         elif obj.size > MAX_COPY_BYTES:
             skipped.append((obj.key, "larger than 5 GiB"))
+        elif dest_source is None:
+            skipped.append((obj.key, "matches no --route"))
         else:
             parsed = parse_log_month(name)
             if parsed is None:
                 skipped.append((obj.key, "no date in the file name"))
             elif year is None or parsed[0] == year:
-                moves.append(Move(obj, destination_key(node, legacy, source, parsed[0], parsed[1], name), *parsed))
+                moves.append(Move(obj, destination_key(node, legacy, dest_source, parsed[0], parsed[1], name), *parsed))
     return Plan(moves, skipped)
+
+
+def duplicate_destinations(moves: Iterable[Move]) -> List[str]:
+    """Return the destination keys that more than one planned move targets."""
+    counts = Counter(move.dest_key for move in moves)
+    return sorted(key for key, count in counts.items() if count > 1)
 
 
 def list_objects(client: Any, bucket: str, prefix: str) -> List[SourceObject]:
@@ -294,6 +332,17 @@ def write_manifest(path: str, rows: Iterable[Tuple[Move, str]]) -> None:
             writer.writerow([move.source.key, move.dest_key, move.source.size, outcome])
 
 
+def route_type(text: str) -> Route:
+    """Parse a REGEX=DEST command-line value into a route."""
+    pattern_text, separator, dest = text.rpartition("=")
+    if not separator or not pattern_text or not dest:
+        raise argparse.ArgumentTypeError(f"'{text}' must look like REGEX=DEST")
+    try:
+        return re.compile(pattern_text), dest
+    except re.error as exc:
+        raise argparse.ArgumentTypeError(f"'{pattern_text}' is not a valid regular expression: {exc}") from exc
+
+
 def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     """Parse the command line."""
     parser = argparse.ArgumentParser(description="Move flat legacy logs into <legacy>/<source>/<YYYY>/<MM>/.")
@@ -301,6 +350,15 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--node", required=True, help="node prefix in the bucket, for example geo")
     parser.add_argument(
         "--source", required=True, nargs="+", help="directories under the node prefix, for example geo-an"
+    )
+    parser.add_argument(
+        "--route",
+        action="append",
+        default=[],
+        type=route_type,
+        metavar="REGEX=DEST",
+        help="send files whose name matches REGEX to the source directory DEST (for a directory holding the logs "
+        "of several sources); files matching no route are left alone. Repeat for each destination.",
     )
     parser.add_argument("--legacy-name", default=DEFAULT_LEGACY_NAME, help="directory the moved logs go under")
     parser.add_argument("--year", type=int, help="only move files dated in this year")
@@ -315,14 +373,15 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
 
 def validate_names(args: argparse.Namespace) -> Optional[str]:
     """Return a message when a name could reach the weblogs layout or leave the node prefix."""
-    names = [args.node, args.legacy_name, *args.source]
+    route_dests = [dest for _, dest in args.route]
+    names = [args.node, args.legacy_name, *args.source, *route_dests]
     for name in names:
         if not name or "/" in name:
             return f"'{name}' must be a single directory name without '/'"
-    for name in [args.legacy_name, *args.source]:
+    for name in [args.legacy_name, *args.source, *route_dests]:
         if name in RESERVED_NAMES:
             return f"'{name}' cannot be a source or legacy name"
-    if args.legacy_name in args.source:
+    if args.legacy_name in args.source or args.legacy_name in route_dests:
         return f"'{args.legacy_name}' cannot be both a source and the legacy name"
     return None
 
@@ -340,11 +399,25 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     try:
         for source in args.source:
             objects = list_objects(client, args.bucket, f"{args.node}/{source}/")
-            plan = plan_source(objects, args.node, source, args.legacy_name, args.year)
+            plan = plan_source(objects, args.node, source, args.legacy_name, args.year, args.route)
             print_plan(source, plan)
             planned.extend(plan.moves)
     except (ClientError, BotoCoreError) as exc:
         print(f"Error listing s3://{args.bucket}: {exc}", file=sys.stderr)
+        return 2
+
+    clashes = duplicate_destinations(planned)
+    if clashes:
+        print(
+            f"Error: {len(clashes)} destination keys are targeted by more than one object, for example:",
+            file=sys.stderr,
+        )
+        for key in clashes[:EXAMPLES_PER_REASON]:
+            print(f"  {key}", file=sys.stderr)
+        print(
+            "Move the sources in separate runs so a differing destination is reported, not overwritten.",
+            file=sys.stderr,
+        )
         return 2
 
     if not args.execute:
