@@ -51,20 +51,20 @@ GEO_IIS_HOSTS = [
 _OTHER_NODE_KEY_TEMPLATES = [
     "geo/legacy/geo-ode-mapserver/{year}/06/u_ex{yy}0601mars2a.log.gz",
     "geo/weblogs/geo-apache/geoweb.rsl.wustl.edu/{year}/10/access.log-{year}-10-22.gz",
-    "atm/atm-apache-http/atm-atmos-apache.{year}-05-01.txt.gz",
-    "atm/all/atm-atmos-ftp.{year}-07-01.gz",
+    "atm/legacy/atm-apache-http/{year}/05/atm-atmos-apache.{year}-05-01.txt.gz",
+    "atm/legacy/atm-atmos-ftp/{year}/07/atm-atmos-ftp.{year}-07-01.gz",
     "eng/en/en-http-pdscloud-prod1/access_log-{year}0418.gz",
-    "img/img-pdsimg1-http/access_log-{year}1023.gz",
-    "naif/naif-httpdlogs/naif_access_log.{yy}0101.gz",
-    "naif/naif-xferlogs/naif_xferlog.{yy}0312.gz",
+    "img/legacy/img-pdsimg1-http/{year}/10/access_log-{year}1023.gz",
+    "naif/legacy/naif-httpdlogs/{year}/01/naif_access_log.{yy}0101.gz",
+    "naif/legacy/naif-xferlogs/{year}/03/naif_xferlog.{yy}0312.gz",
     "naif/weblogs/naif-apache/access_log.{yy}0102.gz",
-    "ppi/ppi-tomcat/pds-ppi_{year}-04.log.gz",
-    "rings/rings-apache-metrics/server1-pds-rings-apache2.{year}-01-01.log.gz",
-    "rings/rings-apache-metrics/tools2_access_log-{year}-01-01.gz",
-    "rings/rings-apache-metrics/tools_access_log-{year}-08-02.gz",
-    "sbn/sbn-apache-http/sbnumd{year}0101.log.gz",
-    "sbn/sbn-psi-tomcat/sbn_archive_{year}0101.txt.gz",
-    "sbn/sbn-psi-tools/sbnapps_{year}0101.txt.gz",
+    "ppi/legacy/ppi-tomcat/{year}/04/pds-ppi_{year}-04.log.gz",
+    "rings/legacy/rings-apache-metrics/{year}/01/server1-pds-rings-apache2.{year}-01-01.log.gz",
+    "rings/legacy/rings-apache-metrics/{year}/01/tools2_access_log-{year}-01-01.gz",
+    "rings/legacy/rings-apache-metrics/{year}/08/tools_access_log-{year}-08-02.gz",
+    "sbn/legacy/sbn-apache-http/{year}/01/sbnumd{year}0101.log.gz",
+    "sbn/legacy/sbn-psi-tomcat/{year}/01/sbn_archive_{year}0101.txt.gz",
+    "sbn/legacy/sbn-psi-tools/{year}/01/sbnapps_{year}0101.txt.gz",
 ]
 # The GEO legacy prefixes share one file name and so do the GEO IIS hosts, as in the real buckets.
 NODE_KEY_TEMPLATES = (
@@ -83,7 +83,7 @@ IMG_JUNK_KEYS = [
     "img/img-pdsimg1-http/nohup.out.gz",
     "img/img-pdsimg2-http/.access_log-20241015.lxNDxM.gz",
 ]
-# Ingested only when LOG_YEARS is unset: no date in the key and no input excludes it.
+# Left in place by the move and so outside every polled prefix: never ingested.
 UNDATED_KEY = "sbn/sbn-psi-tools/robots.txt.tmp.gz"
 
 OUTPUT_CONFIG = """
@@ -263,8 +263,8 @@ class TestLogYearsIntegration(unittest.TestCase):
         self.assertEqual(self.ingest("2023 2024", sincedb_dir, len(added)), added)
 
     def test_unset_loads_every_year_and_skips_junk(self):
-        """With LOG_YEARS unset every dated object is ingested, plus the undated one, minus IMG junk."""
-        expected = sorted(keys_for_years(self.YEARS) + [UNDATED_KEY])
+        """With LOG_YEARS unset every dated object is ingested, minus IMG junk and the undated leftover."""
+        expected = sorted(keys_for_years(self.YEARS))
         got = self.ingest("", Path(tempfile.mkdtemp(dir=self.work_dir)), len(expected))
         self.assertEqual(got, expected)
 
