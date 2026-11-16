@@ -23,33 +23,36 @@ def obj(key: str, size: int = 10, etag: str = "abc") -> Any:
     return rl.SourceObject(key, size, etag)
 
 
-class FakeS3:
-    """The head, copy and delete calls of an S3 client, over a dict of key -> (size, etag[, checksum]).
+MD5_B64 = "5htFUJZ3YkXFP2VIxSJeqA=="  # the uploader-recorded md5chksum of the file in the multipart tests
+MD5_HEX = "e61b455096776245c53f6548c5225ea8"  # the same MD5 as hex, which is the ETag of a single-part copy
 
-    As in S3, a copy of a multipart object gets a plain ETag and only has a checksum when one was requested.
+
+class FakeS3:
+    """The head, copy and delete calls of an S3 client, over a dict of key -> (size, etag[, md5chksum metadata]).
+
+    As in S3, a copy keeps the user metadata, and a copy of a multipart object gets a single-part ETag, which is
+    the MD5 of the bytes: here the MD5 recorded in the metadata, or copy_etag when a test wants a different one.
     """
 
-    def __init__(self, objects: Dict[str, Any], corrupt_copies: bool = False) -> None:
+    def __init__(self, objects: Dict[str, Any], corrupt_copies: bool = False, copy_etag: Any = None) -> None:
         self.objects = dict(objects)
         self.corrupt_copies = corrupt_copies
+        self.copy_etag = copy_etag
         self.deleted: List[str] = []
-        self.copy_checksum_requests: List[Any] = []
 
-    def head_object(self, Bucket: str, Key: str, ChecksumMode: Any = None) -> Dict[str, Any]:
+    def head_object(self, Bucket: str, Key: str) -> Dict[str, Any]:
         if Key not in self.objects:
             raise ClientError({"Error": {"Code": "404", "Message": "Not Found"}}, "HeadObject")
         size, etag, *rest = self.objects[Key]
         meta: Dict[str, Any] = {"ContentLength": size, "ETag": f'"{etag}"'}
-        if rest and rest[0] and ChecksumMode == "ENABLED":
-            meta.update({"ChecksumType": "FULL_OBJECT", "ChecksumCRC64NVME": rest[0]})
+        if rest and rest[0]:
+            meta["Metadata"] = {"md5chksum": rest[0]}
         return meta
 
-    def copy_object(self, CopySource: Dict[str, str], Bucket: str, Key: str, ChecksumAlgorithm: Any = None) -> None:
+    def copy_object(self, CopySource: Dict[str, str], Bucket: str, Key: str) -> None:
         size, etag, *rest = self.objects[CopySource["Key"]]
-        self.copy_checksum_requests.append(ChecksumAlgorithm)
-        checksum = rest[0] if rest and ChecksumAlgorithm else None
-        new_etag = "plain-md5" if "-" in etag else etag
-        self.objects[Key] = (size + 1 if self.corrupt_copies else size, new_etag, checksum)
+        new_etag = (self.copy_etag or MD5_HEX) if "-" in etag else etag
+        self.objects[Key] = (size + 1 if self.corrupt_copies else size, new_etag, *rest)
 
     def delete_object(self, Bucket: str, Key: str) -> None:
         self.deleted.append(Key)
@@ -226,35 +229,45 @@ class MultipartMoveTest(unittest.TestCase):
     def move(self) -> Any:
         return rl.plan_source([obj(self.SRC, size=10, etag="abc-15")], "ppi", "ppi-tomcat", "legacy").moves[0]
 
-    def test_multipart_object_is_verified_by_checksum(self) -> None:
-        client = FakeS3({self.SRC: (10, "abc-15", "crc")})
+    def test_multipart_object_is_verified_by_its_recorded_md5(self) -> None:
+        client = FakeS3({self.SRC: (10, "abc-15", MD5_B64)})
         self.assertEqual(rl.move_object(client, BUCKET, self.move(), keep_source=False), "moved")
-        self.assertEqual(client.copy_checksum_requests, ["CRC64NVME"])
         self.assertEqual(list(client.objects), [self.DEST])
 
-    def test_single_part_object_does_not_request_a_checksum(self) -> None:
-        client = FakeS3({"geo/geo-an/u_ex210105.log.gz": (10, "abc", "crc")})
-        move = rl.plan_source([obj("geo/geo-an/u_ex210105.log.gz")], "geo", "geo-an", "legacy").moves[0]
-        rl.move_object(client, BUCKET, move, keep_source=True)
-        self.assertEqual(client.copy_checksum_requests, [None])
-
-    def test_multipart_object_without_a_checksum_is_not_deleted(self) -> None:
+    def test_multipart_object_without_a_recorded_md5_is_not_deleted(self) -> None:
         client = FakeS3({self.SRC: (10, "abc-15")})
         with self.assertRaises(rl.CopyVerificationError):
             rl.move_object(client, BUCKET, self.move(), keep_source=False)
         self.assertEqual(client.deleted, [])
         self.assertIn(self.SRC, client.objects)
 
-    def test_identical_multipart_destination_is_not_copied_again(self) -> None:
-        client = FakeS3({self.SRC: (10, "abc-15", "crc"), self.DEST: (10, "plain-md5", "crc")})
-        self.assertEqual(rl.move_object(client, BUCKET, self.move(), keep_source=False), "already present")
-        self.assertEqual(client.copy_checksum_requests, [])
+    def test_multipart_copy_with_a_different_md5_is_not_deleted(self) -> None:
+        client = FakeS3({self.SRC: (10, "abc-15", MD5_B64)}, copy_etag="0" * 32)
+        with self.assertRaises(rl.CopyVerificationError):
+            rl.move_object(client, BUCKET, self.move(), keep_source=False)
+        self.assertEqual(client.deleted, [])
 
-    def test_multipart_destination_with_a_different_checksum_is_a_conflict(self) -> None:
-        client = FakeS3({self.SRC: (10, "abc-15", "crc"), self.DEST: (10, "plain-md5", "other")})
+    def test_a_recorded_md5_that_is_not_base64_never_matches(self) -> None:
+        client = FakeS3({self.SRC: (10, "abc-15", "not base64!")})
+        with self.assertRaises(rl.CopyVerificationError):
+            rl.move_object(client, BUCKET, self.move(), keep_source=False)
+        self.assertEqual(client.deleted, [])
+
+    def test_identical_multipart_destination_is_not_copied_again(self) -> None:
+        client = FakeS3({self.SRC: (10, "abc-15", MD5_B64), self.DEST: (10, MD5_HEX, MD5_B64)})
+        self.assertEqual(rl.move_object(client, BUCKET, self.move(), keep_source=False), "already present")
+        self.assertEqual(client.deleted, [self.SRC])
+
+    def test_multipart_destination_with_a_different_md5_is_a_conflict(self) -> None:
+        client = FakeS3({self.SRC: (10, "abc-15", MD5_B64), self.DEST: (10, "f" * 32, MD5_B64)})
         with self.assertRaises(rl.DestinationConflictError):
             rl.move_object(client, BUCKET, self.move(), keep_source=False)
         self.assertEqual(client.deleted, [])
+
+    def test_multipart_destination_is_never_trusted(self) -> None:
+        client = FakeS3({self.SRC: (10, "abc-15", MD5_B64), self.DEST: (10, "abc-15", MD5_B64)})
+        with self.assertRaises(rl.DestinationConflictError):
+            rl.move_object(client, BUCKET, self.move(), keep_source=False)
 
 
 class ExecuteMovesTest(unittest.TestCase):

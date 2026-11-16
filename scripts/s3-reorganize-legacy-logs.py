@@ -13,7 +13,7 @@ NODE/weblogs/ is never read or written.
 
 The default is a dry run that lists the plan and writes nothing. With --execute
 each object is copied server-side, the copy is verified (size and ETag, or size and
-full-object checksum for objects uploaded in parts), and the
+the uploader-recorded md5chksum for objects uploaded in parts), and the
 source is then deleted. The bucket is versioned, so a deleted source stays
 recoverable until the noncurrent-version lifecycle rule expires it. Use
 --keep-source to copy without deleting. Objects that already exist at the
@@ -41,6 +41,7 @@ Usage:
         --source geo-ode-cart --year 2021 --profile PROFILE --execute
 """
 import argparse
+import base64
 import csv
 import re
 import sys
@@ -65,8 +66,7 @@ DEFAULT_WORKERS = 8
 RESERVED_NAMES = ("weblogs",)  # prefixes owned by the Data Upload Manager layout
 MAX_COPY_BYTES = 5 * 1024**3  # largest object a single copy_object call can copy
 NOT_FOUND_CODES = ("404", "NoSuchKey", "NotFound")
-CHECKSUM_ALGORITHM = "CRC64NVME"  # full-object checksum S3 computes for copies of multipart objects
-FULL_OBJECT_CHECKSUMS = ("ChecksumCRC64NVME", "ChecksumCRC32", "ChecksumCRC32C", "ChecksumSHA256", "ChecksumSHA1")
+MD5_METADATA_KEY = "md5chksum"  # base64 MD5 of the file, recorded by the uploader in the object's user metadata
 EXAMPLES_PER_REASON = 5
 
 # (pattern, year is two digits). Group 1 is the year and group 2 the month.
@@ -228,30 +228,30 @@ def is_multipart(source: SourceObject) -> bool:
     return "-" in source.etag
 
 
-def full_object_checksum(client: Any, bucket: str, key: str) -> Optional[str]:
-    """Return the object's full-object checksum as "<algorithm>:<value>", or None when it has none."""
-    meta = client.head_object(Bucket=bucket, Key=key, ChecksumMode="ENABLED")
-    if meta.get("ChecksumType") != "FULL_OBJECT":
+def recorded_md5(client: Any, bucket: str, key: str) -> Optional[str]:
+    """Return the MD5 (hex) the uploader recorded in the object's md5chksum metadata, or None."""
+    value = (client.head_object(Bucket=bucket, Key=key).get("Metadata") or {}).get(MD5_METADATA_KEY)
+    try:
+        return base64.b64decode(value, validate=True).hex() if value else None
+    except ValueError:
         return None
-    for name in FULL_OBJECT_CHECKSUMS:
-        if meta.get(name):
-            return f"{name}:{meta[name]}"
-    return None
 
 
 def matches_source(client: Any, bucket: str, meta: Dict[str, Any], move: Move) -> bool:
     """Whether the destination's metadata matches the source object.
 
-    A single-part source must have the same size and ETag. A multipart source must have the same size
-    and the same full-object checksum, which S3 recomputes for the copy; one without a checksum never matches.
+    A single-part source must have the same size and ETag. A copy of a multipart source is a single part, so its
+    ETag is the MD5 that S3 computed over the copied bytes: it must have the same size and an ETag equal to the MD5
+    the uploader recorded in the source's md5chksum metadata. A multipart source without that metadata never matches.
     """
     source = move.source
     if meta["ContentLength"] != source.size:
         return False
+    etag = meta["ETag"].strip('"')
     if not is_multipart(source):
-        return bool(meta["ETag"].strip('"') == source.etag)
-    expected = full_object_checksum(client, bucket, source.key)
-    return expected is not None and expected == full_object_checksum(client, bucket, move.dest_key)
+        return etag == source.etag
+    expected = recorded_md5(client, bucket, source.key)
+    return expected is not None and "-" not in etag and etag == expected
 
 
 def move_object(client: Any, bucket: str, move: Move, keep_source: bool) -> str:
@@ -267,10 +267,7 @@ def move_object(client: Any, bucket: str, move: Move, keep_source: bool) -> str:
     """
     existing = head_object(client, bucket, move.dest_key)
     if existing is None:
-        extra = {"ChecksumAlgorithm": CHECKSUM_ALGORITHM} if is_multipart(move.source) else {}
-        client.copy_object(
-            CopySource={"Bucket": bucket, "Key": move.source.key}, Bucket=bucket, Key=move.dest_key, **extra
-        )
+        client.copy_object(CopySource={"Bucket": bucket, "Key": move.source.key}, Bucket=bucket, Key=move.dest_key)
         copied = head_object(client, bucket, move.dest_key)
         if copied is None or not matches_source(client, bucket, copied, move):
             raise CopyVerificationError(f"{move.dest_key} does not match {move.source.key}; source left in place")
