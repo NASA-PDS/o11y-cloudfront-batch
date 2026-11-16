@@ -71,7 +71,7 @@ EXAMPLES_PER_REASON = 5
 
 # (pattern, year is two digits). Group 1 is the year and group 2 the month.
 DATE_PATTERNS: Tuple[Tuple["re.Pattern[str]", bool], ...] = (
-    (re.compile(r"(?:u_ex|log\.|xferlog\.)(\d{2})(\d{2})\d{2}"), True),
+    (re.compile(r"(?:u_ex|log\.|xferlog\.)(\d{2})(\d{2})\d{2}(?!\d)"), True),
     (re.compile(r"(?<!\d)(20\d{2})-(\d{2})(?:-\d{2})?(?!\d)"), False),
     (re.compile(r"(?<!\d)(20\d{2})(\d{2})\d{2}(?!\d)"), False),
 )

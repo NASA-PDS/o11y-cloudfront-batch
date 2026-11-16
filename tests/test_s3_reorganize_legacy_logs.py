@@ -68,6 +68,16 @@ class ParseLogMonthTest(unittest.TestCase):
         self.assertEqual(rl.parse_log_month("xferlog.190915.gz"), (2019, 9))
         self.assertEqual(rl.parse_log_month("access_log.221231"), (2022, 12))
 
+    def test_a_two_digit_year_date_is_not_read_out_of_a_longer_number(self) -> None:
+        self.assertEqual(rl.parse_log_month("access_log.20120105"), (2012, 1))
+        self.assertEqual(rl.parse_log_month("xferlog.20151231.gz"), (2015, 12))
+        self.assertIsNone(rl.parse_log_month("log.1234567"))
+
+    def test_suffixes_after_the_two_digit_year_date_are_still_accepted(self) -> None:
+        self.assertEqual(rl.parse_log_month("u_ex250507.log1web4pp.log.gz"), (2025, 5))
+        self.assertEqual(rl.parse_log_month("u_ex241223.log4bm1ms.log.gz"), (2024, 12))
+        self.assertEqual(rl.parse_log_month("naif_access_log.230101.gz"), (2023, 1))
+
     def test_four_digit_year_names(self) -> None:
         self.assertEqual(rl.parse_log_month("access-2023-07-04.log"), (2023, 7))
         self.assertEqual(rl.parse_log_month("access-2023-07.log"), (2023, 7))
