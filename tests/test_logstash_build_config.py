@@ -18,48 +18,48 @@ S3_BLOCK = re.compile(r"^  s3 \{\n(.*?)^  \}$", re.MULTILINE | re.DOTALL)
 
 # Keys in the shapes found in the prod buckets, grouped by the year they belong to.
 KEYS_2023 = [
-    "geo/geo-an/u_ex230101.log.gz",
-    "geo/geo-ftp/u_ex230101web4pp.log.gz",
-    "geo/geo-ode-mapserver/u_ex230601mars2a.log.gz",
+    "geo/legacy/geo-an/2023/01/u_ex230101.log.gz",
+    "geo/legacy/geo-ftp/2023/01/u_ex230101web4pp.log.gz",
+    "geo/legacy/geo-ode-mapserver/2023/06/u_ex230601mars2a.log.gz",
     "geo/weblogs/geo-iis/ode.rsl.wustl.edu/2023/10/u_ex231001.log.gz",
     "geo/weblogs/geo-apache/geoweb.rsl.wustl.edu/2023/10/access.log-2023-10-22.gz",
-    "atm/atm-apache-http/atm-atmos-apache.2023-05-01.txt.gz",
-    "atm/all/atm-atmos-ftp.2023-07-01.gz",
+    "atm/legacy/atm-apache-http/2023/05/atm-atmos-apache.2023-05-01.txt.gz",
+    "atm/legacy/atm-atmos-ftp/2023/07/atm-atmos-ftp.2023-07-01.gz",
     "eng/en/en-http-pdscloud-prod1/access_log-20230418.gz",
     "eng/en/en-http-pdscloud-prod1/access_log.2023-04-14.txt.gz",
-    "eng/en/en-tomcat-pds-prod1/localhost_access_log.2023-01-01.txt.gz",
-    "img/img-pdsimage-http/ssl_access_2023-01-01.log.gz",
-    "img/img-pdsimg1-http/access_log-20231023.gz",
-    "naif/naif-httpdlogs/naif_access_log.230101.gz",
-    "naif/naif-xferlogs/naif_xferlog.230312.gz",
+    "eng/en/en-http-pdscloud-prod2/access_log.2023-01-01.txt.gz",
+    "img/legacy/img-pdsimage-http/2023/01/ssl_access_2023-01-01.log.gz",
+    "img/legacy/img-pdsimg1-http/2023/10/access_log-20231023.gz",
+    "naif/legacy/naif-httpdlogs/2023/01/naif_access_log.230101.gz",
+    "naif/legacy/naif-xferlogs/2023/03/naif_xferlog.230312.gz",
     "naif/weblogs/naif-apache/access_log.230102.gz",
-    "ppi/ppi-tomcat/pds-ppi_2023-04.log.gz",
-    "rings/rings-apache-metrics/server1-pds-rings-apache2.2023-01-01.log.gz",
-    "rings/rings-apache-metrics/tools2_access_log-2023-01-01.gz",
-    "rings/rings-apache-metrics/tools_access_log-2023-08-02.gz",
-    "sbn/sbn-apache-http/sbnumd20230101.log.gz",
-    "sbn/sbn-psi-tomcat/sbn_archive_20230101.txt.gz",
-    "sbn/sbn-psi-tools/sbnapps_20230101.txt.gz",
+    "ppi/legacy/ppi-tomcat/2023/04/pds-ppi_2023-04.log.gz",
+    "rings/legacy/rings-apache-metrics/2023/01/server1-pds-rings-apache2.2023-01-01.log.gz",
+    "rings/legacy/rings-apache-metrics/2023/01/tools2_access_log-2023-01-01.gz",
+    "rings/legacy/rings-apache-metrics/2023/08/tools_access_log-2023-08-02.gz",
+    "sbn/legacy/sbn-apache-http/2023/01/sbnumd20230101.log.gz",
+    "sbn/legacy/sbn-psi-tomcat/2023/01/sbn_archive_20230101.txt.gz",
+    "sbn/legacy/sbn-psi-tools/2023/01/sbnapps_20230101.txt.gz",
     "pdc-cds-infra/cloudfront/access/w3c/pds-main/year=2023/month=08/day=14/EDISTRIBUTIONID.2023-08-14-23.e4a0766e.gz",
     "pdc-cds-infra/cloudfront/access/json/pds-main/year=2023/month=07/day=17/EDISTRIBUTIONID.2023-07-17-21.d7397384.gz",
 ]
 KEYS_OTHER_YEARS = [
-    "geo/geo-an/u_ex220101.log.gz",
-    "geo/geo-an/u_ex240523.log.gz",
-    "geo/geo-ode-mapserver/u_ex24122bm1ms.log.gz",
+    "geo/legacy/geo-an/2022/01/u_ex220101.log.gz",
+    "geo/legacy/geo-an/2024/05/u_ex240523.log.gz",
+    "geo/legacy/geo-ode-mapserver/2024/12/u_ex241222bm1ms.log.gz",
     "geo/weblogs/geo-iis/ode.rsl.wustl.edu/2025/10/u_ex251001.log.gz",
     "geo/weblogs/geo-apache/geoweb.rsl.wustl.edu/2026/10/access.log-2026-10-13.gz",
-    "atm/atm-apache-http/atm-atmos-apache.2022-05-01.txt.gz",
-    "atm/atm-apache-http/atm-atmos-apache.txt-20150601.gz",
+    "atm/legacy/atm-apache-http/2022/05/atm-atmos-apache.2022-05-01.txt.gz",
+    "atm/legacy/atm-apache-http/2015/06/atm-atmos-apache.txt-20150601.gz",
     "eng/en/en-http-pdscloud-prod1/access_log-20220418.gz",
     "eng/en/en-http-pdscloud-prod1/access_log.2025-09-07.txt.gz",
     "img/img-pdsimg1-http/access_log.3.gz",
-    "naif/naif-httpdlogs/naif_access_log.221023.gz",
-    "naif/naif-httpdlogs/access_log.240401.gz",
+    "naif/legacy/naif-httpdlogs/2022/10/naif_access_log.221023.gz",
+    "naif/legacy/naif-httpdlogs/2024/04/access_log.240401.gz",
     "naif/weblogs/naif-apache/access_log.260902.gz",
-    "ppi/ppi-tomcat/pds-ppi_2021-01.log.gz",
-    "rings/rings-apache-metrics/server2-pds-rings-apache2.2025-08-31.log.gz",
-    "sbn/sbn-apache-http/sbnumd20210101.log.gz",
+    "ppi/legacy/ppi-tomcat/2021/01/pds-ppi_2021-01.log.gz",
+    "rings/legacy/rings-apache-metrics/2025/08/server2-pds-rings-apache2.2025-08-31.log.gz",
+    "sbn/legacy/sbn-apache-http/2021/01/sbnumd20210101.log.gz",
     "sbn/sbn-psi-tools/robots.txt.tmp.gz",
     "pdc-cds-infra/cloudfront/access/w3c/pds-main/year=2024/month=08/day=14/EDISTRIBUTIONID.2024-08-14-23.e4a0766e.gz",
     "pdc-cds-infra/cloudfront/access/json/pds-main/year=2026/month=07/day=17/EDISTRIBUTIONID.2026-07-17-21.d7397384.gz",
@@ -261,10 +261,26 @@ class TestLogstashBuildConfig(unittest.TestCase):
         """Two-digit YYMMDD names map to the right year, including the 2020s decade boundary."""
         pattern_2021 = re.compile(self.year_pattern(2021))
         pattern_2025 = re.compile(self.year_pattern(2025))
-        self.assertIsNone(pattern_2021.search("geo/geo-an/u_ex210101.log.gz"))
-        self.assertIsNotNone(pattern_2021.search("geo/geo-an/u_ex250101.log.gz"))
-        self.assertIsNone(pattern_2025.search("geo/geo-an/u_ex250930.log.gz"))
-        self.assertIsNotNone(pattern_2025.search("geo/geo-an/u_ex210101.log.gz"))
+        self.assertIsNone(pattern_2021.search("geo/legacy/geo-an/2021/01/u_ex210101.log.gz"))
+        self.assertIsNotNone(pattern_2021.search("geo/legacy/geo-an/2025/01/u_ex250101.log.gz"))
+        self.assertIsNone(pattern_2025.search("geo/legacy/geo-an/2025/09/u_ex250930.log.gz"))
+        self.assertIsNotNone(pattern_2025.search("geo/legacy/geo-an/2021/01/u_ex210101.log.gz"))
+
+    def test_each_rings_key_is_read_by_exactly_one_input(self):
+        """The three RINGS inputs share one prefix, so their exclude_patterns must split the file families."""
+        with open(os.path.join(SOURCE_INPUT_DIR, "pds-input-s3-rings.conf")) as f:
+            blocks = parse_s3_blocks(f.read())
+        self.assertEqual(len(blocks), 3)
+        for key in (
+            "rings/legacy/rings-apache-metrics/2023/01/server1-pds-rings-apache2.2023-01-01.log.gz",
+            "rings/legacy/rings-apache-metrics/2025/08/server2-pds-rings-apache2.2025-08-31.log.gz",
+            "rings/legacy/rings-apache-metrics/2023/01/tools2_access_log-2023-01-01.gz",
+            "rings/legacy/rings-apache-metrics/2023/08/tools_access_log-2023-08-02.gz",
+        ):
+            readers = [
+                b for b in blocks if key.startswith(b["prefix"][0]) and not re.search(b["exclude_pattern"][0], key)
+            ]
+            self.assertEqual(len(readers), 1, key)
 
     def test_img_junk_is_excluded_without_log_years_and_combined_with_them(self):
         """IMG skips undated and temp files on its own, and the year filter is OR-ed on top."""
@@ -278,7 +294,10 @@ class TestLogstashBuildConfig(unittest.TestCase):
         ]
         for key in junk:
             self.assertIsNotNone(base.search(key), key)
-        for key in ("img/img-pdsimg1-http/access_log-20231023.gz", "img/img-pdsimg3-http/access_log.2021-01-01.txt.gz"):
+        for key in (
+            "img/legacy/img-pdsimg1-http/2023/10/access_log-20231023.gz",
+            "img/legacy/img-pdsimg3-http/2021/01/access_log.2021-01-01.txt.gz",
+        ):
             self.assertIsNone(base.search(key), key)
 
         result = self.run_build("img", "2023")
@@ -286,8 +305,8 @@ class TestLogstashBuildConfig(unittest.TestCase):
         combined = re.compile(self.pipeline_input_blocks("img")[0]["exclude_pattern"][0])
         for key in junk:
             self.assertIsNotNone(combined.search(key), key)
-        self.assertIsNone(combined.search("img/img-pdsimg1-http/access_log-20231023.gz"))
-        self.assertIsNotNone(combined.search("img/img-pdsimg3-http/access_log.2021-01-01.txt.gz"))
+        self.assertIsNone(combined.search("img/legacy/img-pdsimg1-http/2023/10/access_log-20231023.gz"))
+        self.assertIsNotNone(combined.search("img/legacy/img-pdsimg3-http/2021/01/access_log.2021-01-01.txt.gz"))
 
 
 if __name__ == "__main__":

@@ -87,6 +87,38 @@ rm -f /var/lib/logstash/plugins/inputs/s3/sincedb_file_input_${NODE}*
 systemctl --user start logstash
 ```
 
+### Legacy log layout
+
+Logs uploaded before the Data Upload Manager are kept apart from the `weblogs/` layout under `<node>/legacy/<source>/<YYYY>/<MM>/`, for example `geo/legacy/geo-an/2021/01/u_ex210105.log.gz`. A year or month can then be listed, re-ingested or deleted by prefix. The ATM, GEO, NAIF, RINGS and SBN inputs read their `<node>/legacy/<source>/` prefixes; the IMG and PPI inputs read the whole node prefix, which includes `legacy/`.
+
+`scripts/s3-reorganize-legacy-logs.py` moves a source into this layout. It takes the year and month from the file name and copies each object. A copy must match the original before the original is deleted: the same size and ETag, or, for an object uploaded in parts, the same size and an ETag equal to the MD5 the uploader recorded in the object's `md5chksum` metadata (an object without it is never deleted). The default is a dry run. Files with no date in the name, hidden files, and files in a subdirectory are listed and left in place. `<node>/weblogs/` is never touched.
+
+```bash
+BUCKET="<node-logs-bucket>"
+PROFILE="<aws-profile>"
+SOURCES="geo-ode-cart geo-speclib"
+
+# Dry run: per-year counts and anything that would be left alone
+python3 scripts/s3-reorganize-legacy-logs.py --bucket "${BUCKET}" --node geo --source ${SOURCES} --profile "${PROFILE}"
+
+# Copy one year and keep the originals, with a record of every key
+python3 scripts/s3-reorganize-legacy-logs.py --bucket "${BUCKET}" --node geo --source ${SOURCES} --year 2021 \
+  --keep-source --manifest /tmp/legacy-2021.tsv --profile "${PROFILE}" --execute
+
+# Move everything (copy, verify, delete); a rerun skips objects already copied
+python3 scripts/s3-reorganize-legacy-logs.py --bucket "${BUCKET}" --node geo --source ${SOURCES} \
+  --profile "${PROFILE}" --execute
+
+# A directory that holds the logs of several sources: --route sends each file to its own source directory
+python3 scripts/s3-reorganize-legacy-logs.py --bucket "${BUCKET}" --node atm --source all \
+  --route atm-atmos-apache=atm-apache-http --route atm-atmos-ftp=atm-atmos-ftp --profile "${PROFILE}"
+```
+
+- Move every source of a node before deploying inputs that read `<node>/legacy/`. An input finds nothing under a prefix that has not been filled yet.
+- A run that would send two objects to one key stops before copying anything. Move such sources in separate runs, so a destination that differs from its source is reported and left alone.
+- A copy has a new `LastModified`, so an input that already has a sincedb reads the moved objects again. Documents are overwritten, not duplicated (see [Re-ingest from S3](#re-ingest-from-s3)).
+- The bucket is versioned, so a deleted original stays recoverable until the noncurrent-version lifecycle rule expires it. Space is freed after that.
+
 ### Daily egress report
 
 > **WARNING: the egress report (`scripts/egress_report.py`, `src/pds/o11y_batch/egress_report.py`) has not been tested end to end and is not known to work. Validate it before relying on it.**
