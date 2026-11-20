@@ -21,6 +21,12 @@ destination with the same size and ETag are not copied again, so an interrupted
 run can be repeated. A destination that differs from its source is reported and
 left alone.
 
+The copy is conditional (If-None-Match and x-amz-copy-source-if-match), so it never
+overwrites a destination written after the check and only copies the source object
+that was listed. The source is checked against the listing again just before it is
+deleted, so a source replaced during the run is kept. Do not run two migrations over
+the same prefixes at once.
+
 Files with no recognisable date, hidden files, or files in a subdirectory of the
 source, are reported and left where they are.
 
@@ -64,8 +70,10 @@ DEFAULT_LEGACY_NAME = "legacy"
 DEFAULT_REGION = "us-west-2"
 DEFAULT_WORKERS = 8
 RESERVED_NAMES = ("weblogs",)  # prefixes owned by the Data Upload Manager layout
-MAX_COPY_BYTES = 5 * 1024**3  # largest object a single copy_object call can copy
+MAX_COPY_BYTES = 5_000_000_000  # largest object a single copy_object call can copy (5 GB, not 5 GiB)
 NOT_FOUND_CODES = ("404", "NoSuchKey", "NotFound")
+# A conditional copy whose precondition did not hold (412), or that raced another conditional write (409)
+PRECONDITION_CODES = ("412", "PreconditionFailed", "409", "ConditionalRequestConflict")
 MD5_METADATA_KEY = "md5chksum"  # base64 MD5 of the file, recorded by the uploader in the object's user metadata
 EXAMPLES_PER_REASON = 5
 
@@ -87,6 +95,10 @@ class DestinationConflictError(ReorganizeError):
 
 class CopyVerificationError(ReorganizeError):
     """The copy does not match the source object."""
+
+
+class SourceChangedError(ReorganizeError):
+    """The source object was replaced or removed after it was listed."""
 
 
 Route = Tuple["re.Pattern[str]", str]  # (file-name pattern, destination source directory)
@@ -186,7 +198,7 @@ def plan_source(
         elif name.startswith("."):
             skipped.append((obj.key, "hidden file"))
         elif obj.size > MAX_COPY_BYTES:
-            skipped.append((obj.key, "larger than 5 GiB"))
+            skipped.append((obj.key, "larger than 5 GB"))
         elif dest_source is None:
             skipped.append((obj.key, "matches no --route"))
         else:
@@ -254,8 +266,51 @@ def matches_source(client: Any, bucket: str, meta: Dict[str, Any], move: Move) -
     return expected is not None and "-" not in etag and etag == expected
 
 
+def error_code(exc: ClientError) -> str:
+    """Return the S3 error code of a client error."""
+    return str(exc.response.get("Error", {}).get("Code", ""))
+
+
+def copy_if_absent(client: Any, bucket: str, move: Move) -> bool:
+    """Copy the listed source to the destination only if the destination does not exist and the source is unchanged.
+
+    Both conditions are checked by S3 as part of the copy (If-None-Match and x-amz-copy-source-if-match), so a
+    destination written, or a source replaced, after the listing is never overwritten or copied.
+
+    Returns:
+        True when the copy was made, False when a precondition did not hold.
+    """
+    try:
+        client.copy_object(
+            CopySource={"Bucket": bucket, "Key": move.source.key},
+            Bucket=bucket,
+            Key=move.dest_key,
+            CopySourceIfMatch=f'"{move.source.etag}"',
+            IfNoneMatch="*",
+        )
+    except ClientError as exc:
+        if error_code(exc) in PRECONDITION_CODES:
+            return False
+        raise
+    return True
+
+
+def require_unchanged_source(client: Any, bucket: str, move: Move) -> None:
+    """Raise SourceChangedError unless the source key still holds the object that was listed."""
+    current = head_object(client, bucket, move.source.key)
+    if current is None:
+        raise SourceChangedError(f"{move.source.key} is gone; nothing deleted")
+    if current["ContentLength"] != move.source.size or current["ETag"].strip('"') != move.source.etag:
+        raise SourceChangedError(f"{move.source.key} changed after it was listed; source left in place")
+
+
 def move_object(client: Any, bucket: str, move: Move, keep_source: bool) -> str:
     """Copy one object to its destination, verify the copy, and delete the source.
+
+    The copy is conditional: it fails rather than overwrite a destination that appeared after the check, and it
+    copies only the source object that was listed. Before the source is deleted it is checked again against the
+    listing, so a source replaced in the meantime is kept. Runs must still not overlap on the same prefixes: the
+    check and the delete are separate calls, and the bucket's versioning is what covers that gap.
 
     Returns:
         "moved", "copied" when the source is kept, or "already present" when the destination
@@ -264,19 +319,26 @@ def move_object(client: Any, bucket: str, move: Move, keep_source: bool) -> str:
     Raises:
         DestinationConflictError: The destination exists and differs from the source.
         CopyVerificationError: The new object does not match the source.
+        SourceChangedError: The source was replaced or removed after it was listed.
     """
     existing = head_object(client, bucket, move.dest_key)
     if existing is None:
-        client.copy_object(CopySource={"Bucket": bucket, "Key": move.source.key}, Bucket=bucket, Key=move.dest_key)
-        copied = head_object(client, bucket, move.dest_key)
-        if copied is None or not matches_source(client, bucket, copied, move):
-            raise CopyVerificationError(f"{move.dest_key} does not match {move.source.key}; source left in place")
-        outcome = "copied" if keep_source else "moved"
-    elif matches_source(client, bucket, existing, move):
+        if copy_if_absent(client, bucket, move):
+            copied = head_object(client, bucket, move.dest_key)
+            if copied is None or not matches_source(client, bucket, copied, move):
+                raise CopyVerificationError(f"{move.dest_key} does not match {move.source.key}; source left in place")
+            outcome = "copied" if keep_source else "moved"
+        else:
+            # Either the destination appeared since the check, or the source is no longer the listed object.
+            existing = head_object(client, bucket, move.dest_key)
+            if existing is None:
+                raise SourceChangedError(f"{move.source.key} changed after it was listed; nothing copied")
+    if existing is not None:
+        if not matches_source(client, bucket, existing, move):
+            raise DestinationConflictError(f"{move.dest_key} exists and differs from {move.source.key}; left alone")
         outcome = "already present"
-    else:
-        raise DestinationConflictError(f"{move.dest_key} exists and differs from {move.source.key}; left alone")
     if not keep_source:
+        require_unchanged_source(client, bucket, move)
         client.delete_object(Bucket=bucket, Key=move.source.key)
     return outcome
 

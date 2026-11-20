@@ -1,5 +1,6 @@
 """Unit tests for scripts/s3-reorganize-legacy-logs.py."""
 import argparse
+import base64
 import importlib.util
 import unittest
 from pathlib import Path
@@ -24,7 +25,7 @@ def obj(key: str, size: int = 10, etag: str = "abc") -> Any:
 
 
 MD5_B64 = "5htFUJZ3YkXFP2VIxSJeqA=="  # the uploader-recorded md5chksum of the file in the multipart tests
-MD5_HEX = "e61b455096776245c53f6548c5225ea8"  # the same MD5 as hex, which is the ETag of a single-part copy
+MD5_HEX = base64.b64decode(MD5_B64).hex()  # the same MD5 as hex, which is the ETag of a single-part copy
 
 
 class FakeS3:
@@ -39,6 +40,8 @@ class FakeS3:
         self.corrupt_copies = corrupt_copies
         self.copy_etag = copy_etag
         self.deleted: List[str] = []
+        self.before_copy: Any = lambda: None  # a test hook that changes the bucket between the check and the copy
+        self.before_delete: Any = lambda: None  # a test hook that changes the bucket between the check and the delete
 
     def head_object(self, Bucket: str, Key: str) -> Dict[str, Any]:
         if Key not in self.objects:
@@ -49,12 +52,27 @@ class FakeS3:
             meta["Metadata"] = {"md5chksum": rest[0]}
         return meta
 
-    def copy_object(self, CopySource: Dict[str, str], Bucket: str, Key: str) -> None:
-        size, etag, *rest = self.objects[CopySource["Key"]]
+    def copy_object(
+        self,
+        CopySource: Dict[str, str],
+        Bucket: str,
+        Key: str,
+        CopySourceIfMatch: Any = None,
+        IfNoneMatch: Any = None,
+    ) -> None:
+        self.before_copy()
+        source = self.objects.get(CopySource["Key"])
+        if CopySourceIfMatch is not None and (source is None or f'"{source[1]}"' != CopySourceIfMatch):
+            raise ClientError({"Error": {"Code": "PreconditionFailed", "Message": "source"}}, "CopyObject")
+        if IfNoneMatch == "*" and Key in self.objects:
+            raise ClientError({"Error": {"Code": "PreconditionFailed", "Message": "dest"}}, "CopyObject")
+        assert source is not None
+        size, etag, *rest = source
         new_etag = (self.copy_etag or MD5_HEX) if "-" in etag else etag
         self.objects[Key] = (size + 1 if self.corrupt_copies else size, new_etag, *rest)
 
     def delete_object(self, Bucket: str, Key: str) -> None:
+        self.before_delete()
         self.deleted.append(Key)
         del self.objects[Key]
 
@@ -109,7 +127,7 @@ class PlanSourceTest(unittest.TestCase):
         self.assertEqual(plan.moves, [])
         self.assertEqual(
             [reason for _, reason in plan.skipped],
-            ["folder marker", "no date in the file name", "in a subdirectory", "larger than 5 GiB"],
+            ["folder marker", "no date in the file name", "in a subdirectory", "larger than 5 GB"],
         )
 
     def test_hidden_files_are_reported_not_moved(self) -> None:
@@ -230,6 +248,58 @@ class MoveObjectTest(unittest.TestCase):
             rl.move_object(client, BUCKET, self.move(), keep_source=False)
         self.assertEqual(client.deleted, [])
         self.assertIn(self.SRC, client.objects)
+
+    def test_destination_written_after_the_check_is_not_overwritten(self) -> None:
+        client = FakeS3({self.SRC: (10, "abc")})
+        client.before_copy = lambda: client.objects.__setitem__(self.DEST, (99, "zzz"))
+        with self.assertRaises(rl.DestinationConflictError):
+            rl.move_object(client, BUCKET, self.move(), keep_source=False)
+        self.assertEqual(client.objects[self.DEST], (99, "zzz"))
+        self.assertEqual(client.deleted, [])
+
+    def test_identical_destination_written_after_the_check_is_already_present(self) -> None:
+        client = FakeS3({self.SRC: (10, "abc")})
+        client.before_copy = lambda: client.objects.__setitem__(self.DEST, (10, "abc"))
+        self.assertEqual(rl.move_object(client, BUCKET, self.move(), keep_source=False), "already present")
+        self.assertEqual(client.deleted, [self.SRC])
+
+    def test_source_replaced_after_listing_is_not_copied(self) -> None:
+        client = FakeS3({self.SRC: (10, "new")})
+        with self.assertRaises(rl.SourceChangedError):
+            rl.move_object(client, BUCKET, self.move(), keep_source=False)
+        self.assertNotIn(self.DEST, client.objects)
+        self.assertEqual(client.deleted, [])
+
+    def test_newer_source_is_kept_when_the_destination_matches_the_listed_one(self) -> None:
+        # The case from review: the destination matches the object that was listed, but the source key now holds
+        # a newer object. The newer source must not be deleted.
+        client = FakeS3({self.SRC: (12, "newer"), self.DEST: (10, "abc")})
+        with self.assertRaises(rl.SourceChangedError):
+            rl.move_object(client, BUCKET, self.move(), keep_source=False)
+        self.assertEqual(client.objects[self.SRC], (12, "newer"))
+        self.assertEqual(client.deleted, [])
+
+    def test_source_removed_before_the_delete_is_reported(self) -> None:
+        client = FakeS3({self.SRC: (10, "abc"), self.DEST: (10, "abc")})
+        del client.objects[self.SRC]
+        with self.assertRaises(rl.SourceChangedError):
+            rl.move_object(client, BUCKET, self.move(), keep_source=False)
+
+    def test_keep_source_does_not_recheck_the_source(self) -> None:
+        client = FakeS3({self.SRC: (12, "newer"), self.DEST: (10, "abc")})
+        self.assertEqual(rl.move_object(client, BUCKET, self.move(), keep_source=True), "already present")
+        self.assertEqual(client.deleted, [])
+
+    def test_other_copy_errors_propagate(self) -> None:
+        client = FakeS3({self.SRC: (10, "abc")})
+
+        def denied() -> None:
+            raise ClientError({"Error": {"Code": "AccessDenied", "Message": "no"}}, "CopyObject")
+
+        client.before_copy = denied
+        with self.assertRaises(ClientError):
+            rl.move_object(client, BUCKET, self.move(), keep_source=False)
+        self.assertEqual(client.deleted, [])
 
 
 class MultipartMoveTest(unittest.TestCase):
