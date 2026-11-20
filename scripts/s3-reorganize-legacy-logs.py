@@ -437,6 +437,8 @@ def validate_names(args: argparse.Namespace) -> Optional[str]:
     for name in names:
         if not name or "/" in name:
             return f"'{name}' must be a single directory name without '/'"
+        if name in RESERVED_NAMES:
+            return f"'{name}' is reserved for the Data Upload Manager"
     for name in [args.node, args.legacy_name, *args.source, *route_dests]:
     if args.legacy_name in args.source or args.legacy_name in route_dests:
         return f"'{args.legacy_name}' cannot be both a source and the legacy name"
